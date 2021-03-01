@@ -13,13 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+plugins {
+    id 'org.jetbrains.intellij' version "0.6.5"
+    id "org.jetbrains.kotlin.jvm" version "1.4.21"
+}
+
 def versions = [:]
 versions["203"] = [
-    ideaSDKVersion: "IC-203.5981.155",
-    sinceBuild: "203",
-    archiveName: "IntelliJ-Luanalysis"
+        ideaSDKVersion: "IC-203.5981.155",
+        sinceBuild: "203",
+        untilBuild: "203.*",
+        archiveName: "IntelliJ-EmmyLua",
+        targetCompatibilityLevel: 11
 ]
-
 versions.each { shortVer, cfg ->
     task "build_${shortVer}"(type: GradleBuild) {
         tasks = ["buildPluginWithBunch", "test"]
@@ -31,3 +38,44 @@ versions.each { shortVer, cfg ->
 }
 
 task buildAll(dependsOn: [build_203])
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    compile fileTree(dir: "libs", includes: ["*.jar"])
+}
+
+sourceCompatibility = 1.8
+sourceSets {
+    main {
+        java.srcDirs 'gen'
+        resources {
+            exclude "debugger/**"
+        }
+    }
+}
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+        freeCompilerArgs = ['-Xjvm-default=all', '-Xopt-in=kotlin.contracts.ExperimentalContracts']
+    }
+}
+
+compileTestKotlin {
+    kotlinOptions {
+        jvmTarget = "11"
+        freeCompilerArgs = ['-Xjvm-default=all', '-Xopt-in=kotlin.contracts.ExperimentalContracts']
+    }
+}
+
+intellij {
+    type 'IC'
+    updateSinceUntilBuild false
+    downloadSources false
+    version = versions["203"].ideaSDKVersion
+    localPath System.getenv("IDEA_HOME_203")
+}
