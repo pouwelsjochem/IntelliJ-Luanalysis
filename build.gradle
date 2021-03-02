@@ -24,7 +24,7 @@ versions["203"] = [
         ideaSDKVersion: "IC-203.5981.155",
         sinceBuild: "203",
         untilBuild: "203.*",
-        archiveName: "IntelliJ-EmmyLua",
+        archiveName: "IntelliJ-Luanalysis",
         targetCompatibilityLevel: 11
 ]
 versions.each { shortVer, cfg ->
