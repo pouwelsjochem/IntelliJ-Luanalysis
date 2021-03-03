@@ -152,7 +152,7 @@ class LuaAnnotator : Annotator {
 
             if (res != null) { //std api highlighting
                 val containingFile = res.containingFile
-                if (LuaFileUtil.isStdLibFile(containingFile.virtualFile, o.project)) {
+                if (containingFile.name == "global.def.lua") {
                     createInfoAnnotation(id, "Std apis")
                             .textAttributes(LuaHighlightingData.STD_API)
                             .create()
