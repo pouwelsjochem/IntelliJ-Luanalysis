@@ -11,8 +11,8 @@
 -- WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 -- License for the specific language governing permissions and limitations under
 -- the License.
-
-table = {}
+---@class std_Table
+local table = {}
 
 ---
 --- Given a list where all elements are strings or numbers, returns the string
@@ -104,5 +104,3 @@ function table.sort(list, comp) end
 ---@param j number
 ---@return T...
 function table.unpack(list, i, j) end
-
-return table

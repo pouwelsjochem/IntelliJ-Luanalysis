@@ -15,7 +15,7 @@
 ---@class std__Math
 ---@field huge number @The float value `HUGE_VAL`, a value larger than any other numeric value.
 ---@field pi number @The value of π.
-math = {}
+local math = {}
 
 ---
 --- Returns the absolute value of `x`. (integer/float)
