@@ -12,7 +12,8 @@
 -- License for the specific language governing permissions and limitations under
 -- the License.
 
-os = {}
+---@class std_Os
+local os = {}
 
 ---
 --- Returns an approximation of the amount in seconds of CPU time used by
