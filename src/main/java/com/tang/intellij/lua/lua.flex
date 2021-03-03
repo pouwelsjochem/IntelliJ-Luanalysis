@@ -97,7 +97,7 @@ REGION_END =--(endregion|\}\}\})([^\r\n]*)*
 BLOCK_COMMENT=--\[=*\[[\s\S]*(\]=*\])?
 DOC_BLOCK_COMMENT=--\[=*\[---+[\s\S]*(\]=*\])?
 SHORT_COMMENT=--[^\r\n]*
-DOC_COMMENT=----*[^\r\n]*(\r?\n{LINE_WS}*----*[^\r\n]*)*
+DOC_COMMENT=---\@-*[^\r\n]*(\r?\n{LINE_WS}*----*[^\r\n]*)*
 
 //Strings
 DOUBLE_QUOTED_STRING=\"([^\\\"]|\\\S|\\[\r\n])*\"?  //\"([^\\\"\r\n]|\\[^\r\n])*\"?
