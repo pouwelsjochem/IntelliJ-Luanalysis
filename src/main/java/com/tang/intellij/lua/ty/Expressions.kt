@@ -419,12 +419,12 @@ private fun getType(context: SearchContext, def: PsiElement): ITy? {
             }
 
             //Global
-            if (type != null && isGlobal(def) && def.docTy == null && type !is ITyPrimitive) {
-                // Explicitly instantiating a union (not calling the type.union()) as the global type resolves to type,
-                // and hence we would have just got type back. We're creating a union because we need to ensure members
-                // are indexed against the global name (for completion) as well as the other type (for type resolution).
-                type = TyUnion(listOf(type, TyClass.createGlobalType(def)))
-            }
+//            if (type != null && isGlobal(def) && def.docTy == null && type !is ITyPrimitive) {
+//                // Explicitly instantiating a union (not calling the type.union()) as the global type resolves to type,
+//                // and hence we would have just got type back. We're creating a union because we need to ensure members
+//                // are indexed against the global name (for completion) as well as the other type (for type resolution).
+//                type = TyUnion(listOf(type, TyClass.createGlobalType(def)))
+//            }
 
             type
         }
