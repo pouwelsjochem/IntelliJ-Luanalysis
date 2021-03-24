@@ -26,7 +26,6 @@ import com.intellij.util.Processor
 import com.intellij.util.containers.ContainerUtil
 import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.codeInsight.inspection.MatchFunctionSignatureInspection
-import com.tang.intellij.lua.comment.psi.LuaDocClassRef
 import com.tang.intellij.lua.ext.recursionGuard
 import com.tang.intellij.lua.project.LuaSettings
 import com.tang.intellij.lua.psi.*
@@ -222,7 +221,9 @@ interface ITy : Comparable<ITy> {
     }
 
     fun getMemberSubstitutor(context: SearchContext): ITySubstitutor? {
-        return getSuperClass(context)?.getMemberSubstitutor(context)
+        return getSuperClass(context)?.let {
+            Ty.resolve(it, context).getMemberSubstitutor(context)
+        }
     }
 
     fun processMember(context: SearchContext, name: String, deep: Boolean = true, process: (ITy, LuaClassMember) -> Boolean): Boolean
@@ -699,13 +700,6 @@ abstract class Ty(override val kind: TyKind) : ITy {
             return getBuiltin(name) ?: TyLazyClass(name, psiElement)
         }
 
-        fun create(classRef: LuaDocClassRef): ITy {
-            val simpleType = create(classRef.typeRef.name, classRef)
-            return if (classRef.tyList.size > 0) {
-                TyGeneric(classRef.tyList.map { it.getType() }.toTypedArray(), simpleType)
-            } else simpleType
-        }
-
         @ExperimentalContracts
         fun isInvalid(ty: ITy?): Boolean {
             contract {
@@ -745,27 +739,82 @@ abstract class Ty(override val kind: TyKind) : ITy {
             }
         }
 
-        fun processSuperClasses(start: ITy, searchContext: SearchContext, processor: (ITy) -> Boolean): Boolean {
+        fun processSuperClasses(start: ITy, context: SearchContext, processor: (ITy) -> Boolean): Boolean {
             val processedName = mutableSetOf<String>()
             var cur: ITy? = start
 
             while (cur != null) {
                 ProgressManager.checkCanceled()
 
-                val superType = cur.getSuperClass(searchContext)
+                val superTy = cur.getSuperClass(context)
 
-                if (superType != null) {
-                    if (!processedName.add(superType.displayName)) {
+                if (superTy != null) {
+                    val resolvedSuperTy = Ty.resolve(superTy, context)
+
+                    if (!processedName.add(resolvedSuperTy.displayName)) {
                         return true
                     }
-                    if (!processor(superType))
+                    if (!processor(resolvedSuperTy))
                         return false
                 }
 
-                cur = superType
+                cur = superTy
             }
 
             return true
+        }
+
+        data class PendingTy(val ty: ITy, val unresolvedTy: ITy)
+
+        inline fun eachUnresolved(ty: ITy, context: SearchContext, fn: (unresolvedTy: ITy, resolvedTy: ITy) -> Unit) {
+            if (!TyUnion.any(ty) { it is ITyResolvable && it.willResolve(context) }) {
+                TyUnion.each(ty) {
+                    fn(it, it)
+                }
+                return
+            }
+
+            val visitedTys = mutableSetOf<ITy>()
+
+            val pendingTys = if (ty is TyUnion) {
+                visitedTys.add(ty)
+                val childTys = ty.getChildTypes()
+                ArrayList<PendingTy>(Math.max(2 * childTys.size, 8)).apply {
+                    childTys.forEach { childTy ->
+                        this.add(PendingTy(childTy, childTy))
+                    }
+                }
+            } else {
+                ArrayList<PendingTy>().apply {
+                    this.add(PendingTy(ty, ty))
+                }
+            }
+
+            while (pendingTys.isNotEmpty()) {
+                val pendingTy = pendingTys.removeLast()
+
+                if (visitedTys.add(pendingTy.ty)) {
+                    val resolvedMemberTy = (pendingTy.ty as? ITyResolvable)?.resolve(context) ?: pendingTy.ty
+
+                    if (resolvedMemberTy !== pendingTy.ty) {
+                        if (resolvedMemberTy is TyUnion) {
+                            val childTys = resolvedMemberTy.getChildTypes()
+                            pendingTys.ensureCapacity(pendingTys.size + childTys.size)
+                            resolvedMemberTy.getChildTypes().forEach {
+                                pendingTys.add(PendingTy(it, it))
+                            }
+                        } else {
+                            pendingTys.add(PendingTy(resolvedMemberTy, pendingTy.unresolvedTy))
+                        }
+                    } else {
+                        fn(pendingTy.unresolvedTy, pendingTy.ty)
+                    }
+                }
+            }
+        }
+
+        inline fun eachUnresolved(ty: ITy, context: SearchContext, fn: (ITy) -> Unit) {
+            eachUnresolved(ty, context) { unresolvedTy, _ -> fn(unresolvedTy) }
         }
 
         inline fun eachResolved(ty: ITy, context: SearchContext, fn: (ITy) -> Unit) {

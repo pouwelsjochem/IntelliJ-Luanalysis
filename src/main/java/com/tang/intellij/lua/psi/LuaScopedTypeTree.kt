@@ -63,9 +63,15 @@ interface LuaScopedTypeTree {
     fun findName(context: SearchContext, pin: PsiElement, name: String): LuaScopedType?
 }
 
-private class ScopedTypeTreeScope(val psi: PsiElement, val treeBuilder: ScopedTypeTree, val parent: ScopedTypeTreeScope?) {
+private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree, val parent: ScopedTypeTreeScope?) {
     private val types = ArrayList<LuaScopedType>(0)
     private val childScopes = LinkedList<ScopedTypeTreeScope>()
+
+    private var dumbCachedOwner: ITy? = null
+    private var isDumbOwnerCached = false
+
+    private var cachedOwner: ITy? = null
+    private var isOwnerCached = false
 
     fun addChildScope(scope: ScopedTypeTreeScope) {
         childScopes.add(scope)
@@ -114,42 +120,6 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val treeBuilder: ScopedTy
         return null
     }
 
-    private fun getOwner(context: SearchContext): ITy? {
-        if (psi is LuaClassMethodDefStat) {
-            return psi.guessParentType(context)
-        }
-
-        if (psi is LuaAssignStat) {
-            return (psi.varExprList.expressionList.first() as? LuaIndexExpr)?.guessParentType(context)
-        }
-
-        // We attempt to detect metatable literals, and within the table treat the owner (self) as return value of __call
-        if (psi is LuaTableField) {
-            return ((PsiTreeUtil.getParentOfType(psi, LuaStatement::class.java) as? LuaExprStat)?.expression as? LuaCallExpr)?.let { callExpr ->
-                val argList = callExpr.argList
-
-                // Note: We're not resolving the call expression because we want this to work in "dumb mode" (i.e. during indexing). If the user
-                //       has a "setmetatable" in scope that isn't functionally equivalent to Lua's setmetatable... too bad.
-                if (argList.size == 2 && argList[1] == psi.parent && callExpr.nameExpr?.text == Constants.FUNCTION_SETMETATABLE) {
-                    val callMetamethod = (psi.parent as LuaTableExpr).findField(Constants.METAMETHOD_CALL)?.valueExpr as? LuaFuncBodyOwner<*>
-                    (callMetamethod?.guessReturnType(context) as? ITyClass)?.let { TyClass.createSelfType(it) }
-                } else {
-                    null
-                }
-            }
-        }
-
-        return null
-    }
-
-    fun findOwner(context: SearchContext): ITy? {
-        if (psi is LuaDocTagClass) {
-            return psi.type
-        }
-
-        return getOwner(context) ?: parent?.findOwner(context)
-    }
-
     fun findName(context: SearchContext, name: String, beforeIndex: Int? = null): LuaScopedType? {
         val type = if (beforeIndex != null) {
             get(name, beforeIndex)
@@ -161,7 +131,7 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val treeBuilder: ScopedTy
             return type
         }
 
-        val cls: ITy? = getOwner(context)
+        val cls: ITy? = findOwner(context)
 
         if (cls?.isAnonymous == false) {
             val classTag = if (cls is TySerializedClass) {
@@ -183,6 +153,72 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val treeBuilder: ScopedTy
         }
 
         return parent?.findName(context, name)
+    }
+
+    private fun guessOwner(context: SearchContext): ITy? {
+        return when (psi) {
+            is LuaDocTagClass -> psi.type
+            is LuaClassMethodDefStat -> psi.guessParentType(context)
+            is LuaAssignStat -> (psi.varExprList.expressionList.first() as? LuaIndexExpr)?.guessParentType(context)
+            is LuaTableField -> {
+                // We attempt to detect metatable literals, and within the table treat the owner (self) as return value of __call
+                ((PsiTreeUtil.getParentOfType(psi, LuaStatement::class.java) as? LuaExprStat)?.expression as? LuaCallExpr)?.let { callExpr ->
+                    val argList = callExpr.argList
+
+                    // Note: We're not resolving the call expression because we want this to work in "dumb mode" (i.e. during indexing). If the user
+                    //       has a "setmetatable" in scope that isn't functionally equivalent to Lua's setmetatable... too bad.
+                    if (argList.size == 2 && argList[1] == psi.parent && callExpr.nameExpr?.text == Constants.FUNCTION_SETMETATABLE) {
+                        val callMetamethod = (psi.parent as LuaTableExpr).findField(Constants.METAMETHOD_CALL)?.valueExpr as? LuaFuncBodyOwner<*>
+                        (callMetamethod?.guessReturnType(context) as? ITyClass)?.let { TyClass.createSelfType(it) }
+                    } else {
+                        null
+                    }
+                }
+            }
+            else -> parent?.findOwner(context)
+        }
+    }
+
+    private fun findDumbOwner(context: SearchContext): ITy? {
+        if (isOwnerCached) {
+            return cachedOwner
+        }
+
+        if (isDumbOwnerCached) {
+            return dumbCachedOwner
+        }
+
+        val owner = guessOwner(context)
+
+        if (owner != null) {
+            dumbCachedOwner = owner
+            isDumbOwnerCached = true
+        }
+
+        return owner
+    }
+
+    private fun findSmartOwner(context: SearchContext): ITy? {
+        if (isOwnerCached) {
+            return cachedOwner
+        }
+
+        val owner = guessOwner(context)
+
+        if (owner != null) {
+            cachedOwner = owner
+            isOwnerCached = true
+        }
+
+        return owner
+    }
+
+    fun findOwner(context: SearchContext): ITy? {
+        return if (context.isDumb) {
+            findDumbOwner(context)
+        } else {
+            findSmartOwner(context)
+        }
     }
 }
 
@@ -386,7 +422,7 @@ private class ScopedTypeStubTree(file: PsiFile) : ScopedTypeTree(file) {
             while (stub != null) {
                 val stubPsi = stub.psi
 
-                if (stubPsi is LuaScopedType) {
+                if (psiScopedType == null && stubPsi is LuaScopedType) {
                     psiScopedType = stubPsi
                 }
 

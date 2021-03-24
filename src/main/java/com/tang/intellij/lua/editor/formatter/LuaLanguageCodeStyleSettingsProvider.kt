@@ -20,7 +20,7 @@ import com.intellij.application.options.CodeStyleAbstractPanel
 import com.intellij.application.options.IndentOptionsEditor
 import com.intellij.application.options.SmartIndentOptionsEditor
 import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable
-import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizable.SPACES_OTHER
+import com.intellij.psi.codeStyle.CodeStyleSettingsCustomizableOptions
 import com.intellij.psi.codeStyle.CommonCodeStyleSettings
 import com.intellij.psi.codeStyle.LanguageCodeStyleSettingsProvider
 import com.tang.intellij.lua.lang.LuaLanguage
@@ -49,9 +49,9 @@ class LuaLanguageCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvider()
     override fun customizeSettings(consumer: CodeStyleSettingsCustomizable, settingsType: LanguageCodeStyleSettingsProvider.SettingsType) {
         when (settingsType) {
             LanguageCodeStyleSettingsProvider.SettingsType.SPACING_SETTINGS -> {
-                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AFTER_TABLE_FIELD_SEP", "After field sep", SPACES_OTHER)
-                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AROUND_CONCAT_OPERATOR", "After concat sep", SPACES_OTHER)
-                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_INSIDE_INLINE_TABLE", "Inside inline table", SPACES_OTHER)
+                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AFTER_TABLE_FIELD_SEP", "After field sep", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
+                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AROUND_CONCAT_OPERATOR", "After concat sep", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
+                consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_INSIDE_INLINE_TABLE", "Inside inline table", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
                 consumer.showStandardOptions("SPACE_AROUND_ASSIGNMENT_OPERATORS",
                         "SPACE_BEFORE_COMMA",
                         "SPACE_AFTER_COMMA")
