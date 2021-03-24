@@ -103,4 +103,4 @@ function table.sort(list, comp) end
 ---@param i number
 ---@param j number
 ---@return T...
-function table.unpack(list, i, j) end
+function unpack(list, i, j) end

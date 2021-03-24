@@ -65,10 +65,10 @@ function os.clock() end
 --- On non-POSIX systems, this function may be not thread safe because of its
 --- reliance on C function `gmtime` and C function `localtime`.
 ---@overload fun(): string
----@overload fun(format: "%c"): string
+---@overload fun(format: "%a"|"%A"|"%b"|"%B"|"%c"|"%d"|"%H"|"%I"|"%M"|"%m"|"%p"|"%S"|"%w"|"%x"|"%X"|"%Y"|"%y"): string
 ---@overload fun(format: "!*t" | "*t"): std__Date
 ---@overload fun(format: string): string | std__Date
----@overload fun(format: "%c", time: number): string
+---@overload fun(format: "%a"|"%A"|"%b"|"%B"|"%c"|"%d"|"%H"|"%I"|"%M"|"%m"|"%p"|"%S"|"%w"|"%x"|"%X"|"%Y"|"%y", time: number): string
 ---@overload fun(format: "!*t" | "*t", time: number): std__Date
 ---@param format string
 ---@param time number

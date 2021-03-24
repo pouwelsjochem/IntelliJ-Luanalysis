@@ -301,9 +301,10 @@ function require(modname) end
 --- Otherwise, `index` must be the string "#", and `select` returns
 --- the total number of extra arguments it received.
 ---@generic T
----@param index number|string
+---@param index number
 ---@vararg T
 ---@return T
+---@overload fun<T>(_hashtag:"#", ...:T):number
 function select(index, ...) end
 
 ---
