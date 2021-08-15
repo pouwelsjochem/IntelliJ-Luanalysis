@@ -286,12 +286,9 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
 
     args.forEachIndexed { index, luaExpr ->
         // TODO: unknown vs. any - should be unknown
-        val ty = (
-                if (index == args.lastIndex)
-                    context.withMultipleResults { luaExpr.guessType(context) }
-                else
-                    context.withIndex(0) { luaExpr.guessType(context) }
-                ) ?: Primitives.UNKNOWN
+        val ty = context.withListEntry(index == args.lastIndex) {
+            luaExpr.guessType(context)
+        }  ?: Primitives.UNKNOWN
 
         if (ty is TyMultipleResults && index == args.lastIndex) {
             val concreteResults = if (ty.variadic) {
@@ -535,30 +532,7 @@ abstract class Ty(override val kind: TyKind) : ITy {
         return this
     }
 
-    override fun toString(): String {
-        val list = mutableListOf<String>()
-        TyUnion.each(this) { //尽量不使用Global
-            if (!it.isAnonymous && !(it is ITyClass && it.isGlobal)) {
-                if (it is ITyFunction || it is TyMultipleResults) {
-                    list.add("(${it.displayName})")
-                } else {
-                    list.add(it.displayName)
-                }
-            }
-        }
-        if (list.isEmpty()) { //使用Global
-            TyUnion.each(this) {
-                if (!it.isAnonymous && (it is ITyClass && it.isGlobal)) {
-                    if (it is ITyFunction || it is TyMultipleResults) {
-                        list.add("(${it.displayName})")
-                    } else {
-                        list.add(it.displayName)
-                    }
-                }
-            }
-        }
-        return list.joinToString(" | ")
-    }
+    override fun toString() = displayName
 
     override fun contravariantOf(other: ITy, context: SearchContext, flags: Int): Boolean {
         if ((other.kind == TyKind.Unknown && flags and TyVarianceFlags.STRICT_UNKNOWN == 0)
@@ -838,7 +812,7 @@ abstract class Ty(override val kind: TyKind) : ITy {
                 if (visitedTys.add(pendingTy)) {
                     val resolvedMemberTy = (pendingTy as? ITyResolvable)?.resolve(context) ?: pendingTy
 
-                    if (resolvedMemberTy !== pendingTy) {
+                    if (resolvedMemberTy != pendingTy) {
                         if (resolvedMemberTy is TyUnion) {
                             pendingTys.addAll(resolvedMemberTy.getChildTypes())
                         } else {

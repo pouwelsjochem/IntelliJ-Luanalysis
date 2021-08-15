@@ -59,10 +59,6 @@ class TyGenericParameter(val name: String, varName: String, superClass: ITy? = n
         return true
     }
 
-    override fun toString(): String {
-        return displayName
-    }
-
     override fun contravariantOf(other: ITy, context: SearchContext, flags: Int): Boolean {
         return if (flags and TyVarianceFlags.ABSTRACT_PARAMS != 0) {
             getSuperClass(context)?.contravariantOf(other, context, flags) ?: true
@@ -123,19 +119,29 @@ interface ITyGeneric : ITyResolvable {
 
     override fun resolve(context: SearchContext, genericArgs: Array<out ITy>?): ITy {
         val resolved = (base as? ITyResolvable)?.resolve(context, args) ?: base
-        return if (resolved !== base) resolved else this
+        return if (resolved != base) resolved else this
     }
 }
 
 open class TyGeneric(override val args: Array<out ITy>, override val base: ITy) : Ty(TyKind.Generic), ITyGeneric {
 
     override fun equals(other: Any?): Boolean {
+        if (this === other) {
+            return true
+        }
+
         return other is ITyGeneric && other.base == base && other.displayName == displayName
     }
 
     override fun equals(other: ITy, context: SearchContext): Boolean {
         if (this === other) {
             return true
+        }
+
+        val resolved = Ty.resolve(this, context)
+
+        if (resolved !== this) {
+            return resolved.equals(other, context)
         }
 
         val resolvedOther = Ty.resolve(other, context)
@@ -255,7 +261,8 @@ open class TyGeneric(override val args: Array<out ITy>, override val base: ITy) 
 
         if (otherBase != null) {
             if (otherBase.equals(resolvedBase, context)) {
-                return args.size == otherArgs?.size && args.asSequence().zip(otherArgs.asSequence()).all { (arg, otherArg) ->
+                val baseArgCount = otherArgs?.size ?: 0
+                return baseArgCount == 0 || args.size == otherArgs?.size && args.asSequence().zip(otherArgs.asSequence()).all { (arg, otherArg) ->
                     // Args are always invariant as we don't support use-site variance nor immutable/read-only annotations
                     arg.equals(otherArg, context)
                             || (flags and TyVarianceFlags.STRICT_UNKNOWN == 0 && otherArg.isUnknown)

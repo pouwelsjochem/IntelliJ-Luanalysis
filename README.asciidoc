@@ -1,4 +1,4 @@
-= Luanalysis (an EmmyLua fork) for IntelliJ IDEA image:https://img.shields.io/github/sponsors/Benjamin-Dobell?style=social["Sponsors", link="http://github.com/sponsors/Benjamin-Dobell"]
+= Luanalysis (an EmmyLua fork) for IntelliJ IDEA image:https://github.com/Benjamin-Dobell/IntelliJ-Luanalysis/actions/workflows/build.yml/badge.svg["Build", link="https://github.com/Benjamin-Dobell/IntelliJ-Luanalysis/actions/workflows/build.yml"] image:https://img.shields.io/github/sponsors/Benjamin-Dobell?style=social["Sponsors", link="http://github.com/sponsors/Benjamin-Dobell"]
 :toc:
 :toc-placement!:
 ifndef::env-github[:icons: font]
@@ -365,39 +365,11 @@ image:./snapshot/26_2_variadic_casts.png[image]
 
 == Building from Source
 
-=== Prerequisites
-
-To build, you will require a Java 11 SDK.
-
-[TIP]
-====
-On macOS you can install Jetbrain's Java 11 SDK with:
+Build the plugin with:
 
 [source,shell]
 ----
-brew install java11
-----
-====
-
-=== Building
-
-You will then need to ensure the `JAVA_HOME` environment variable points to a Java 11 SDK.
-
-[TIP]
-====
-On macOS, with OpenJDK 11 installed from Homebrew, this can be achieved with:
-
-[source,shell]
-----
-export JAVA_HOME=/usr/local/opt/openjdk@11
-----
-====
-
-Build the plugin with the latest Jetbrain SDK (203 at the time of writing) with:
-
-[source,shell]
-----
-./gradlew build_203
+./gradlew build
 ----
 
 ****

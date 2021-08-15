@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017. tangzx(love.tangzx@qq.com)
+ * Copyright (c) 2020
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,25 +14,12 @@
  * limitations under the License.
  */
 
-package com.tang.intellij.test.completion
+package com.tang.intellij.test.inspections
 
-class TestAlias : TestCompletionBase() {
-    fun `test alias`() {
-        myFixture.configureByFile("class.lua")
-        doTest("""
-            --- test_alias.lua
+import com.tang.intellij.lua.codeInsight.inspection.doc.IllegalAliasInspection
 
-            ---@alias Handler fun(emmy: Emmy):void
-
-            ---@param func Handler
-            local function test(func)
-            end
-
-            test(function(value)
-                value.--[[caret]]
-            end)
-        """) {
-            assertTrue(it.contains("sayHello"))
-        }
+class IllegalAliasTest : LuaInspectionsTestBase(IllegalAliasInspection()) {
+    fun testIllegalAlias() {
+        checkByFile("illegal_alias.lua")
     }
 }
