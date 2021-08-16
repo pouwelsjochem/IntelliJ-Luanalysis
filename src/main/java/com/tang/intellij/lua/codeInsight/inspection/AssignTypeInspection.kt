@@ -174,7 +174,7 @@ class AssignTypeInspection : StrictInspection() {
 
                             if (isClassDeclaration) {
                                 if (resolvedValue !is TyTable) {
-                                    myHolder.registerProblem(expression, "Type mismatch. Required: 'table' Found: '%s'".format(value.displayName))
+//                                    myHolder.registerProblem(expression, "Type mismatch. Required: 'table' Found: '%s'".format(value.displayName))
                                 }
                             } else {
                                 val inspectionTargetElement = if (assignees.size > 1) assignee else null

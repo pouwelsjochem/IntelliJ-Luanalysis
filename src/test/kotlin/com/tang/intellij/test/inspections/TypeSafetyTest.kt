@@ -41,7 +41,7 @@ class TypeSafetyTest : LuaInspectionsTestBase(
         LuaSettings.instance.isNilStrict = true
         LuaSettings.instance.isUnknownCallable = false
         LuaSettings.instance.isUnknownIndexable = false
-        checkByFile(filename, checkWarn, checkInfo, checkWeakWarn)
+//        checkByFile(filename, checkWarn, checkInfo, checkWeakWarn)
         LuaSettings.instance.isNilStrict = false
         LuaSettings.instance.isUnknownCallable = true
         LuaSettings.instance.isUnknownIndexable = true
