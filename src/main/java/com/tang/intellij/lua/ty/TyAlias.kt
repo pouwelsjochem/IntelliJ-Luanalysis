@@ -19,7 +19,6 @@ package com.tang.intellij.lua.ty
 import com.intellij.psi.stubs.StubInputStream
 import com.intellij.psi.stubs.StubOutputStream
 import com.intellij.util.io.StringRef
-import com.tang.intellij.lua.psi.LuaClassMember
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.readGenericParamsNullable
 import com.tang.intellij.lua.stubs.writeGenericParamsNullable
@@ -37,8 +36,8 @@ interface ITyAlias : ITyResolvable {
         val params = this.params
 
         return if (params != null && genericArgs != null) {
-            val paramSubstitutor = TyParameterSubstitutor.withArgs(context, params, genericArgs)
-            ty.substitute(paramSubstitutor)
+            val paramSubstitutor = TyParameterSubstitutor.withArgs(params, genericArgs)
+            ty.substitute(context, paramSubstitutor)
         } else {
             ty
         }
@@ -54,27 +53,27 @@ class TyAlias(override val name: String,
         return other is ITyAlias && other.name == name && other.flags == flags
     }
 
-    override fun equals(other: ITy, context: SearchContext): Boolean {
+    override fun equals(context: SearchContext, other: ITy): Boolean {
         if (this === other) {
             return true
         }
 
-        return ty.equals(other, context)
+        return ty.equals(context, other)
     }
 
     override fun hashCode(): Int {
         return name.hashCode()
     }
 
-    override fun processMembers(context: SearchContext, deep: Boolean, process: (ITy, LuaClassMember) -> Boolean): Boolean {
+    override fun processMembers(context: SearchContext, deep: Boolean, process: ProcessTypeMember): Boolean {
         return ty.processMembers(context, deep, process)
     }
 
-    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: (ITy, LuaClassMember) -> Boolean): Boolean {
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: ProcessTypeMember): Boolean {
         return ty.processMember(context, name, deep, process)
     }
 
-    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: (ITy, LuaClassMember) -> Boolean): Boolean {
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: ProcessTypeMember): Boolean {
         return ty.processIndexer(context, indexTy, exact, deep, process)
     }
 
@@ -86,12 +85,12 @@ class TyAlias(override val name: String,
         return params
     }
 
-    override fun substitute(substitutor: ITySubstitutor): ITy {
-        return substitutor.substitute(this)
+    override fun substitute(context: SearchContext, substitutor: ITySubstitutor): ITy {
+        return substitutor.substitute(context, this)
     }
 
-    override fun contravariantOf(other: ITy, context: SearchContext, flags: Int): Boolean {
-        return ty.contravariantOf(other, context, flags) || super.contravariantOf(other, context, flags)
+    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
+        return ty.contravariantOf(context, other, flags) || super.contravariantOf(context, other, flags)
     }
 }
 

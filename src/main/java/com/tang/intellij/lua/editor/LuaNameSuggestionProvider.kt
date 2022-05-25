@@ -22,7 +22,6 @@ import com.intellij.psi.codeStyle.NameUtil
 import com.intellij.psi.codeStyle.SuggestedNameInfo
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.refactoring.rename.NameSuggestionProvider
-import com.intellij.util.Processor
 import com.tang.intellij.lua.psi.*
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.ty.*
@@ -40,12 +39,12 @@ class LuaNameSuggestionProvider : NameSuggestionProvider {
         }
     }
 
-    private fun collectNames(type: ITy, context: SearchContext, collector: (name: String, suffix: String, preferLonger: Boolean) -> Unit) {
+    private fun collectNames(context: SearchContext, type: ITy, collector: (name: String, suffix: String, preferLonger: Boolean) -> Unit) {
         when (type) {
             is ITyClass -> {
                 if (!type.isAnonymous && type !is TyDocTable)
                     collector(fixName(type.className), "", false)
-                Ty.processSuperClasses(type, context) { superType ->
+                Ty.processSuperClasses(context, type) { superType ->
                     val superClass = (if (superType is ITyGeneric) superType.base else superType) as? ITyClass
                     if (superClass != null && !superClass.isAnonymous) {
                         collector(fixName(superClass.className), "", false)
@@ -53,12 +52,12 @@ class LuaNameSuggestionProvider : NameSuggestionProvider {
                     true
                 }
             }
-            is ITyArray -> collectNames(type.base, context) { name, _, _ ->
+            is ITyArray -> collectNames(context, type.base) { name, _, _ ->
                 collector(name, "List", false)
             }
             is ITyGeneric -> {
                 val paramTy = type.getArgTy(1)
-                collectNames(paramTy, context) { name, _, _ ->
+                collectNames(context, paramTy) { name, _, _ ->
                     collector(name, "Map", false)
                 }
             }
@@ -111,14 +110,14 @@ class LuaNameSuggestionProvider : NameSuggestionProvider {
         val search = ReferencesSearch.search(psi, psi.useScope)
         search.forEach { getNames(it, set) }
 
-        if (psi is LuaTypeGuessable) {
+        if (psi is LuaPsiTypeGuessable) {
             val context = SearchContext.get(psi.getProject())
             val type = psi.guessType(context)
             if (type != null) {
                 val names = HashSet<String>()
 
                 TyUnion.each(type) { ty ->
-                    collectNames(ty, context) { name, suffix, preferLonger ->
+                    collectNames(context, ty) { name, suffix, preferLonger ->
                         if (names.add(name)) {
                             val strings = NameUtil.getSuggestionsByName(name, "", suffix, false, preferLonger, false)
                             set.addAll(strings)

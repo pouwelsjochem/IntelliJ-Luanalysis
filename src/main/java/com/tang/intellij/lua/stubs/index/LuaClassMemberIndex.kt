@@ -24,23 +24,25 @@ import com.intellij.psi.stubs.IntStubIndexExtension
 import com.intellij.psi.stubs.StubIndex
 import com.intellij.util.Processor
 import com.intellij.util.containers.ContainerUtil
-import com.tang.intellij.lua.comment.psi.*
-import com.tang.intellij.lua.psi.*
+import com.tang.intellij.lua.psi.LuaPsiTypeMember
+import com.tang.intellij.lua.psi.LuaTypeMethod
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.ty.*
 
-typealias ProcessClassMember = (ownerTy: ITyClass, member: LuaClassMember) -> Boolean
+typealias ProcessLuaPsiClassMember = (ownerTy: ITyClass, member: LuaPsiTypeMember) -> Boolean
 
-class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
+// TODO: Underlying processKey(...) logic is fragile/wrong. We should not be resolving/traversing classes looking for
+//       keys in the index. A type we encounter may not store its members in the index (see TySubstitutedDocTable).
+class LuaClassMemberIndex : IntStubIndexExtension<LuaPsiTypeMember>() {
     override fun getKey() = StubKeys.CLASS_MEMBER
 
-    override fun get(s: Int, project: Project, scope: GlobalSearchScope): Collection<LuaClassMember> =
-            StubIndex.getElements(StubKeys.CLASS_MEMBER, s, project, scope, LuaClassMember::class.java)
+    override fun get(s: Int, project: Project, scope: GlobalSearchScope): Collection<LuaPsiTypeMember> =
+            StubIndex.getElements(StubKeys.CLASS_MEMBER, s, project, scope, LuaPsiTypeMember::class.java)
 
     companion object {
         val instance = LuaClassMemberIndex()
 
-        private fun processKey(context: SearchContext, type: ITyClass, key: String, process: ProcessClassMember): Boolean {
+        private fun processKey(context: SearchContext, type: ITyClass, key: String, process: ProcessLuaPsiClassMember): Boolean {
             if (context.isDumb) {
                 return false
             }
@@ -62,7 +64,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             className: String,
             keys: Collection<String>,
             deep: Boolean,
-            process: ProcessClassMember
+            process: ProcessLuaPsiClassMember
         ): Boolean {
             keys.forEach { key ->
                 val classKey = "$className$key"
@@ -79,10 +81,10 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
                     return@processAlias true
                 }
 
-                val aliasedTy = LuaClassIndex.find(aliasedName, context)?.type
+                val aliasedTy = LuaClassIndex.find(context, aliasedName)?.type
 
                 if (aliasedTy != null) {
-                    LuaClassIndex.find(aliasedName, context)?.type?.let { aliasedClass ->
+                    LuaClassIndex.find(context, aliasedName)?.type?.let { aliasedClass ->
                         processClassKeys(context, aliasedClass, aliasedName, keys, deep, process)
                     } ?: true
                 } else {
@@ -96,7 +98,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             }
 
             if (deep) {
-                return Ty.processSuperClasses(owner, context) { superType ->
+                return Ty.processSuperClasses(context, owner) { superType ->
                     val superClass = (if (superType is ITyGeneric) superType.base else superType) as? ITyClass
                     if (superClass != null) {
                         processClassKeys(context, superClass, superClass.className, keys, false, process)
@@ -107,7 +109,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             return true
         }
 
-        private fun processClassKeys(context: SearchContext, cls: ITyClass, keys: Collection<String>, deep: Boolean, process: ProcessClassMember): Boolean {
+        private fun processClassKeys(context: SearchContext, cls: ITyClass, keys: Collection<String>, deep: Boolean, process: ProcessLuaPsiClassMember): Boolean {
             return if (cls is TyGenericParameter) {
                 (cls.superClass as? ITyClass)?.let { processClassKeys(context, it, it.className, keys, deep, process) } ?: true
             } else {
@@ -115,7 +117,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             }
         }
 
-        fun getMembers(context: SearchContext, className: String): Collection<LuaClassMember> {
+        fun getMembers(context: SearchContext, className: String): Collection<LuaPsiTypeMember> {
             if (context.isDumb) {
                 return listOf()
             }
@@ -129,7 +131,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             fieldName: String,
             searchIndexers: Boolean,
             deep: Boolean,
-            process: ProcessClassMember
+            process: ProcessLuaPsiClassMember
         ): Boolean {
             val memberKey = "*$fieldName"
             val keys = if (searchIndexers) listOf(memberKey, "*[\"${fieldName}\"]") else listOf(memberKey)
@@ -144,8 +146,8 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             processAllIndexers(context, cls, deep) { _, member ->
                 val candidateIndexerTy = member.guessIndexType(context)
 
-                if (candidateIndexerTy?.contravariantOf(indexTy, context, TyVarianceFlags.STRICT_UNKNOWN) == true) {
-                    if (inexactIndexerTy?.contravariantOf(candidateIndexerTy, context, TyVarianceFlags.STRICT_UNKNOWN) != false) {
+                if (candidateIndexerTy?.contravariantOf(context, indexTy, TyVarianceFlags.STRICT_UNKNOWN) == true) {
+                    if (inexactIndexerTy?.contravariantOf(context, candidateIndexerTy, TyVarianceFlags.STRICT_UNKNOWN) != false) {
                         inexactIndexerTy = candidateIndexerTy
                     }
                 }
@@ -159,10 +161,10 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
         }
 
         // TODO: Push this logic back on consumers (assuming it's correct for the use case) and delete the method.
-        fun findMethod(context: SearchContext, cls: ITyClass, memberName: String, deep: Boolean = true): LuaClassMethod<*>? {
-            var target: LuaClassMethod<*>? = null
+        fun findMethod(context: SearchContext, cls: ITyClass, memberName: String, deep: Boolean = true): LuaTypeMethod<*>? {
+            var target: LuaTypeMethod<*>? = null
             processMember(context, cls, memberName, false, deep) { _, member ->
-                if (member is LuaClassMethod<*>) {
+                if (member is LuaTypeMethod<*>) {
                     target = member
                     false
                 } else {
@@ -172,7 +174,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             return target
         }
 
-        fun processAllIndexers(context: SearchContext, type: ITyClass, deep: Boolean, process: ProcessClassMember): Boolean {
+        fun processAllIndexers(context: SearchContext, type: ITyClass, deep: Boolean, process: ProcessLuaPsiClassMember): Boolean {
             return processClassKeys(context, type, listOf("[]"), deep, process)
         }
 
@@ -183,7 +185,7 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             exact: Boolean,
             searchMembers: Boolean,
             deep: Boolean,
-            process: ProcessClassMember
+            process: ProcessLuaPsiClassMember
         ): Boolean {
             var exactIndexerFound = false
             val exactIndexerResult = if (searchMembers && indexTy is TyPrimitiveLiteral && indexTy.primitiveKind == TyPrimitiveKind.String) {
@@ -207,8 +209,8 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             processAllIndexers(context, type, deep) { _, member ->
                 val candidateIndexerTy = member.guessIndexType(context)
 
-                if (candidateIndexerTy?.contravariantOf(indexTy, context, TyVarianceFlags.STRICT_UNKNOWN) == true) {
-                    if (inexactIndexerTy?.contravariantOf(candidateIndexerTy, context, TyVarianceFlags.STRICT_UNKNOWN) != false) {
+                if (candidateIndexerTy?.contravariantOf(context, indexTy, TyVarianceFlags.STRICT_UNKNOWN) == true) {
+                    if (inexactIndexerTy?.contravariantOf(context, candidateIndexerTy, TyVarianceFlags.STRICT_UNKNOWN) != false) {
                         inexactIndexerTy = candidateIndexerTy
                     }
                 }
@@ -221,18 +223,18 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
             } ?: false
         }
 
-        fun processAll(context: SearchContext, type: ITyClass, process: ProcessClassMember) {
+        fun processAll(context: SearchContext, type: ITyClass, process: ProcessLuaPsiClassMember) {
             if (processKey(context, type, type.className, process)) {
                 type.lazyInit(context)
                 type.processAlias { aliasedName ->
-                    LuaClassIndex.find(aliasedName, context)?.type?.let { aliasedClass ->
+                    LuaClassIndex.find(context, aliasedName)?.type?.let { aliasedClass ->
                         processKey(context, aliasedClass, aliasedName, process)
                     } ?: true
                 }
             }
         }
 
-        fun processNamespaceMember(context: SearchContext, namespace: String, memberName: String, processor: Processor<LuaClassMember>): Boolean {
+        fun processNamespaceMember(context: SearchContext, namespace: String, memberName: String, processor: Processor<LuaPsiTypeMember>): Boolean {
             if (context.isDumb) {
                 return false
             }
@@ -244,13 +246,13 @@ class LuaClassMemberIndex : IntStubIndexExtension<LuaClassMember>() {
         }
 
         fun indexMemberStub(indexSink: IndexSink, className: String, memberName: String) {
-            val nonSelfClassName = getNonSelfTypeName(className)
+            val nonSelfClassName = getSuffixlessClassName(className)
             indexSink.occurrence(StubKeys.CLASS_MEMBER, nonSelfClassName.hashCode())
             indexSink.occurrence(StubKeys.CLASS_MEMBER, "$nonSelfClassName*$memberName".hashCode())
         }
 
         fun indexIndexerStub(indexSink: IndexSink, className: String, indexTy: ITy) {
-            val nonSelfClassName = getNonSelfTypeName(className)
+            val nonSelfClassName = getSuffixlessClassName(className)
             TyUnion.each(indexTy) {
                 if (it is TyPrimitiveLiteral && it.primitiveKind == TyPrimitiveKind.String) {
                     indexMemberStub(indexSink, nonSelfClassName, it.value)

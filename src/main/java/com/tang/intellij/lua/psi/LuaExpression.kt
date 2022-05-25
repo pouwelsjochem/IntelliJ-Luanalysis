@@ -19,4 +19,4 @@ package com.tang.intellij.lua.psi
 import com.intellij.psi.StubBasedPsiElement
 import com.intellij.psi.stubs.StubElement
 
-interface LuaExpression<Stub: StubElement<*>> : LuaCommentOwner, LuaTypeGuessable, StubBasedPsiElement<Stub>
+interface LuaExpression<Stub: StubElement<*>> : LuaCommentOwner, LuaPsiTypeGuessable, StubBasedPsiElement<Stub>

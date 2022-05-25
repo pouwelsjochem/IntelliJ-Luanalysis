@@ -52,12 +52,31 @@ local nilOrNumber
 ---@type nil | boolean
 local nilOrBoolean
 
+---@type fun(value: nil | number): void
+local wantsNilOrNumber
+
+---@type fun(value: nil | number): void
+local wantsNilOrNumber
+
+---@shape WantsNilOrNumberAndOptionallyNilOrBoolean
+---@overload fun(value: nil | number): void
+---@overload fun(value: nil | number, value: nil | boolean): void
+
+---@type WantsNilOrNumberAndOptionallyNilOrBoolean
+local wantsNilOrNumberAndOptionallyNilOrBoolean
+
 ---@vararg number
 local function varargFunction7(...)
     nilOrNumber = ...
     nilOrNumber, nilOrNumber = ...
     <error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">nilOrBoolean</error>, <error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">nilOrBoolean</error> = <error descr="Result 2, type mismatch. Required: 'boolean | nil' Found: 'nil | number'"><error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">...</error></error>
     <error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">nilOrBoolean</error>, <error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">nilOrBoolean</error> = <error descr="Result 2, type mismatch. Required: 'boolean | nil' Found: 'nil | number'"><error descr="Type mismatch. Required: 'boolean | nil' Found: 'nil | number'">...</error></error>
+
+    local implicitNilOrNumber = ...
+    wantsNilOrNumberAndOptionallyNilOrBoolean(implicitNilOrNumber)
+    wantsNilOrNumberAndOptionallyNilOrBoolean(<error descr="Type mismatch. Required: 'boolean | nil' Found: 'number'. In: fun(value: nil | number, value: boolean | nil): void">...</error><error descr="Missing argument: value: boolean | nil. In: fun(value: nil | number, value: boolean | nil): void"><error descr="Missing argument: value: nil | number. In: fun(value: nil | number): void"><error descr="Missing argument: value: nil | number. In: fun(value: nil | number, value: boolean | nil): void">)</error></error></error>
+    wantsNilOrNumberAndOptionallyNilOrBoolean((...))
+    wantsNilOrNumberAndOptionallyNilOrBoolean(..., nilOrBoolean)
 end
 
 ---@type fun<T>(index: number, vararg T): T
@@ -182,7 +201,7 @@ overloadMergedStringStringMap['a'] = <error descr="Type mismatch. Required: 'nil
 ---@vararg T
 ---@return T[]
 local function varargsToArray(...)
-return {...}
+    return {...}
 end
 
 ---@class SomeClassWantingArrays
@@ -212,11 +231,4 @@ local function acceptsVarString(...)
     acceptsStringArray(varargsToArray(...))
     SomeClassWantingArrays.acceptsNumberArray({<error descr="Type mismatch. Required: 'number' Found: 'string'">...</error>})
     acceptsNumberArray(<error descr="Type mismatch. Required: 'number[]' Found: 'string[]'">varargsToArray(...)</error>)
-end
-
----@vararg fun(a: string, b: number): number
-local function acceptsFun(...)
-    local a = {...}
-    a[1]("a string", 1)
-    a[1]("a string", <error descr="Type mismatch. Required: 'number' Found: '\"a string\"'">"a string"</error>)
 end

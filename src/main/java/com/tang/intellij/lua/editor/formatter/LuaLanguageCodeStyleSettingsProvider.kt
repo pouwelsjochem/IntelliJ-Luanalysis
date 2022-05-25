@@ -78,6 +78,11 @@ class LuaLanguageCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvider()
                         "ALIGN_TABLE_FIELD_ASSIGN",
                         "Align table field assign",
                         "Table")
+
+                consumer.showCustomOption(LuaCodeStyleSettings::class.java,
+                    "KEEP_MULTIPLE_STATEMENTS_IN_ONE_LINE",
+                    "Multiple statements in one line",
+                    "Keep when reformatting")
             }
             else -> {
             }

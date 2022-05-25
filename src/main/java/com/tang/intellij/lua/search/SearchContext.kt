@@ -22,7 +22,8 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.ProjectAndLibrariesScope
 import com.tang.intellij.lua.ext.ILuaTypeInfer
-import com.tang.intellij.lua.psi.LuaTypeGuessable
+import com.tang.intellij.lua.psi.LuaPsiTypeGuessable
+import com.tang.intellij.lua.psi.ScopedTypeSubstitutor
 import com.tang.intellij.lua.ty.ITy
 import java.util.*
 
@@ -30,7 +31,85 @@ import java.util.*
 
  * Created by tangzx on 2017/1/14.
  */
-abstract class SearchContext internal constructor() {
+abstract class SearchContext {
+    abstract val project: Project
+    abstract val element: PsiElement?
+
+    val index: Int get() = myIndex // Multiple results index
+    val supportsMultipleResults: Boolean get() = myMultipleResults
+
+    private var myDumb = false
+    private var myIndex = 0
+    private var myMultipleResults = false
+    private var myInStack = false
+    private var myScope: GlobalSearchScope? = null
+
+    private val myInferCache = mutableMapOf<LuaPsiTypeGuessable, ITy>()
+
+    fun <T> withIndex(index: Int, supportMultipleResults: Boolean = false, action: () -> T): T {
+        val savedIndex = this.index
+        val savedMultipleResults = this.supportsMultipleResults
+        myIndex = index
+        myMultipleResults = supportMultipleResults
+        val ret = action()
+        myIndex = savedIndex
+        myMultipleResults = savedMultipleResults
+        return ret
+    }
+
+    fun <T> withMultipleResults(action: () -> T): T {
+        val savedIndex = this.index
+        val savedMultipleResults = this.supportsMultipleResults
+        myIndex = -1
+        myMultipleResults = true
+        val ret = action()
+        myIndex = savedIndex
+        myMultipleResults = savedMultipleResults
+        return ret
+    }
+
+    fun <T> withListEntry(last: Boolean, action: () -> T): T {
+        return if (last) {
+            withMultipleResults(action)
+        } else {
+            withIndex(0, false, action)
+        }
+    }
+
+    val scope get(): GlobalSearchScope {
+        if (isDumb)
+            return GlobalSearchScope.EMPTY_SCOPE
+        if (myScope == null) {
+            myScope = ProjectAndLibrariesScope(project)
+        }
+        return myScope!!
+    }
+
+    val isDumb: Boolean
+        get() = myDumb || DumbService.isDumb(project)
+
+    fun <T> withScope(scope: GlobalSearchScope, action: () -> T): T {
+        val oriScope = myScope
+        myScope = scope
+        val ret = action()
+        myScope = oriScope
+        return ret
+    }
+
+    private fun inferAndCache(psi: LuaPsiTypeGuessable): ITy? {
+        return if (index == -1) {
+            val result = myInferCache.getOrDefault(psi, null) ?: ILuaTypeInfer.infer(this, psi)
+
+            if (result != null) {
+                myInferCache[psi] = result
+            }
+
+            result
+        } else {
+            ILuaTypeInfer.infer(this, psi)
+        }
+    }
+
     companion object {
         private val threadLocal = object : ThreadLocal<Stack<SearchContext>>() {
             override fun initialValue(): Stack<SearchContext> {
@@ -47,12 +126,16 @@ abstract class SearchContext internal constructor() {
             }
         }
 
-        fun infer(psi: LuaTypeGuessable): ITy? {
+        fun infer(psi: LuaPsiTypeGuessable): ITy? {
             return with(psi.project) { it.inferAndCache(psi) }
         }
 
-        fun infer(psi: LuaTypeGuessable, context: SearchContext): ITy? {
-            return with(context, null) { it.inferAndCache(psi) }
+        fun infer(context: SearchContext, psi: LuaPsiTypeGuessable): ITy? {
+            return with(context, null) {
+                it.inferAndCache(psi)?.let { ty ->
+                    ScopedTypeSubstitutor.substitute(context, ty)
+                }
+            }
         }
 
         private fun <T> with(ctx: SearchContext, defaultValue: T, action: (ctx: SearchContext) -> T): T {
@@ -94,75 +177,6 @@ abstract class SearchContext internal constructor() {
                 it.myDumb = dumb
                 ret
             }
-        }
-    }
-
-    abstract val project: Project
-    abstract val element: PsiElement?
-
-    val index: Int get() = myIndex // Multiple results index
-    val supportsMultipleResults: Boolean get() = myMultipleResults
-
-    private var myDumb = false
-    private var myIndex = 0
-    private var myMultipleResults = false
-    private var myInStack = false
-    private val myInferCache = mutableMapOf<LuaTypeGuessable, ITy>()
-    private var myScope: GlobalSearchScope? = null
-
-    fun <T> withIndex(index: Int, supportMultipleResults: Boolean = false, action: () -> T): T {
-        val savedIndex = this.index
-        val savedMultipleResults = this.supportsMultipleResults
-        myIndex = index
-        myMultipleResults = supportMultipleResults
-        val ret = action()
-        myIndex = savedIndex
-        myMultipleResults = savedMultipleResults
-        return ret
-    }
-
-    fun <T> withMultipleResults(action: () -> T): T {
-        val savedIndex = this.index
-        val savedMultipleResults = this.supportsMultipleResults
-        myIndex = -1
-        myMultipleResults = true
-        val ret = action()
-        myIndex = savedIndex
-        myMultipleResults = savedMultipleResults
-        return ret
-    }
-
-    val scope get(): GlobalSearchScope {
-        if (isDumb)
-            return GlobalSearchScope.EMPTY_SCOPE
-        if (myScope == null) {
-            myScope = ProjectAndLibrariesScope(project)
-        }
-        return myScope!!
-    }
-
-    val isDumb: Boolean
-        get() = myDumb || DumbService.isDumb(project)
-
-    fun <T> withScope(scope: GlobalSearchScope, action: () -> T): T {
-        val oriScope = myScope
-        myScope = scope
-        val ret = action()
-        myScope = oriScope
-        return ret
-    }
-
-    private fun inferAndCache(psi: LuaTypeGuessable): ITy? {
-        return if (index == -1) {
-            val result = myInferCache.getOrDefault(psi, null) ?: ILuaTypeInfer.infer(psi, this)
-
-            if (result != null) {
-                myInferCache[psi] = result
-            }
-
-            result
-        } else {
-            ILuaTypeInfer.infer(psi, this)
         }
     }
 }

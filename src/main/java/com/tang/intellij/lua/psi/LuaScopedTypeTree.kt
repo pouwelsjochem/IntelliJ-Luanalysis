@@ -27,18 +27,31 @@ import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.index.LuaClassIndex
 import com.tang.intellij.lua.ty.*
 import java.util.*
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.contract
+
+open class FoundLuaScope(open val scope: LuaScopedTypeTreeScope, val psiScopedTypeIndex: Int? = null)
+
+interface LuaScopedTypeTreeScope {
+    val psi: PsiElement
+    val tree: LuaScopedTypeTree
+    val parent: LuaScopedTypeTreeScope?
+
+    fun findName(context: SearchContext, name: String, beforeIndex: Int? = null): LuaScopedType?
+    fun findOwner(context: SearchContext): ITy?
+}
 
 interface LuaScopedTypeTree {
     companion object {
         private val treeKey = Key.create<ScopedTypeTree>("lua.object.tree.types")
 
-        fun get(file: PsiFile): LuaScopedTypeTree {
+        fun get(file: PsiFile): LuaScopedTypeTree? {
+            if (file !is LuaPsiFile) {
+                return null
+            }
+
             val currentTree = file.getUserData(treeKey)
 
             if (currentTree?.shouldRebuild() != false) {
-                if (file is LuaPsiFile && !file.isContentsLoaded) {
+                if (!file.isContentsLoaded) {
                     try {
                         return ScopedTypeStubTree(file).apply {
                             buildTree(file)
@@ -59,11 +72,12 @@ interface LuaScopedTypeTree {
         }
     }
 
-    fun findOwner(context: SearchContext, pin: PsiElement): ITy?
     fun findName(context: SearchContext, pin: PsiElement, name: String): LuaScopedType?
+    fun findOwner(context: SearchContext, pin: PsiElement): ITy?
+    fun findScope(element: PsiElement): FoundLuaScope?
 }
 
-private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree, val parent: ScopedTypeTreeScope?) {
+private class ScopedTypeTreeScope(override val psi: LuaTypeScope, override val tree: ScopedTypeTree, override val parent: ScopedTypeTreeScope?): LuaScopedTypeTreeScope {
     private val types = ArrayList<LuaScopedType>(0)
     private val childScopes = LinkedList<ScopedTypeTreeScope>()
 
@@ -120,7 +134,7 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree,
         return null
     }
 
-    fun findName(context: SearchContext, name: String, beforeIndex: Int? = null): LuaScopedType? {
+    override fun findName(context: SearchContext, name: String, beforeIndex: Int?): LuaScopedType? {
         val type = if (beforeIndex != null) {
             get(name, beforeIndex)
         } else {
@@ -135,7 +149,7 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree,
 
         if (cls?.isAnonymous == false) {
             val classTag = if (cls is TySerializedClass) {
-                LuaClassIndex.find(cls.className, context)
+                LuaClassIndex.find(context, cls.className)
             } else if (cls is TyPsiDocClass) {
                 cls.tagClass
             } else null
@@ -159,22 +173,7 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree,
         return when (psi) {
             is LuaDocTagClass -> psi.type
             is LuaClassMethodDefStat -> psi.guessParentType(context)
-            is LuaAssignStat -> (psi.varExprList.expressionList.first() as? LuaIndexExpr)?.guessParentType(context)
-            is LuaTableField -> {
-                // We attempt to detect metatable literals, and within the table treat the owner (self) as return value of __call
-                ((PsiTreeUtil.getParentOfType(psi, LuaStatement::class.java) as? LuaExprStat)?.expression as? LuaCallExpr)?.let { callExpr ->
-                    val argList = callExpr.argList
-
-                    // Note: We're not resolving the call expression because we want this to work in "dumb mode" (i.e. during indexing). If the user
-                    //       has a "setmetatable" in scope that isn't functionally equivalent to Lua's setmetatable... too bad.
-                    if (argList.size == 2 && argList[1] == psi.parent && callExpr.nameExpr?.text == Constants.FUNCTION_SETMETATABLE) {
-                        val callMetamethod = (psi.parent as LuaTableExpr).findField(Constants.METAMETHOD_CALL)?.valueExpr as? LuaFuncBodyOwner<*>
-                        (callMetamethod?.guessReturnType(context) as? ITyClass)?.let { TyClass.createSelfType(it) }
-                    } else {
-                        null
-                    }
-                }
-            }
+            is LuaClosureExpr -> psi.guessParentType(context)
             else -> parent?.findOwner(context)
         }
     }
@@ -213,7 +212,7 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree,
         return owner
     }
 
-    fun findOwner(context: SearchContext): ITy? {
+    override fun findOwner(context: SearchContext): ITy? {
         return if (context.isDumb) {
             findDumbOwner(context)
         } else {
@@ -222,46 +221,12 @@ private class ScopedTypeTreeScope(val psi: PsiElement, val tree: ScopedTypeTree,
     }
 }
 
-@ExperimentalContracts
-private fun isValidTypeScope(element: PsiElement?): Boolean {
-    contract {
-        returns(true) implies (element is LuaTypeScope)
-    }
+private class FoundScope(override val scope: ScopedTypeTreeScope, psiScopedTypeIndex: Int? = null): FoundLuaScope(scope, psiScopedTypeIndex)
 
-    if (element !is LuaTypeScope) {
-        return false
-    }
-
-    return when (element) {
-        is LuaLocalDefStat -> {
-            // TODO: The closure really ought to be a scope, not the statement.
-            if (element.localDefList.size == 1) {
-                element.exprList?.expressionList?.let {
-                    (it.firstOrNull() as? LuaClosureExpr)?.comment != null
-                } ?: false
-            } else false
-        }
-        is LuaAssignStat -> {
-            // TODO: As above, assign statements should not be scopes.
-            if (element.varExprList.expressionList.size == 1) {
-                element.valueExprList?.expressionList?.let {
-                    (it.firstOrNull() as? LuaClosureExpr)?.comment != null
-                } ?: false
-            } else false
-        }
-        is LuaTableField -> {
-            return element.valueExpr is LuaClosureExpr
-        }
-        else -> true
-    }
-}
-
-private abstract class ScopedTypeTree(val file: PsiFile) : LuaRecursiveVisitor(), LuaScopedTypeTree {
+private abstract class ScopedTypeTree(val file: LuaPsiFile) : LuaRecursiveVisitor(), LuaScopedTypeTree {
     companion object {
         val scopeKey = Key.create<ScopedTypeTreeScope>("lua.object.tree.types.scope")
     }
-
-    protected class FoundScope(val scope: ScopedTypeTreeScope, val psiScopedTypeIndex: Int? = null)
 
     private val modificationStamp: Long = file.modificationStamp
 
@@ -310,10 +275,23 @@ private abstract class ScopedTypeTree(val file: PsiFile) : LuaRecursiveVisitor()
         file.accept(this)
     }
 
-    abstract fun findScope(element: PsiElement): FoundScope?
+    abstract override fun findScope(element: PsiElement): FoundScope?
 
     override fun findOwner(context: SearchContext, pin: PsiElement): ITy? {
-        return findScope(pin)?.scope?.findOwner(context)
+        val scopeSourceElement = if (pin is LuaDocPsiElement) {
+            val comment = LuaCommentUtil.findContainer(pin)
+            val cls = comment.tagClass
+
+            if (cls != null) {
+                return cls.type
+            }
+
+            comment.owner ?: pin
+        } else {
+            pin
+        }
+
+        return findScope(scopeSourceElement)?.scope?.findOwner(context)
     }
 
     override fun findName(context: SearchContext, pin: PsiElement, name: String): LuaScopedType? {
@@ -329,7 +307,7 @@ private abstract class ScopedTypeTree(val file: PsiFile) : LuaRecursiveVisitor()
     override fun visitElement(element: PsiElement) {
         // WARNING: (element !is LuaDocTagClass || currentScope.psi !is LuaDocTagClass) is used instead of (element != currentScope.psi)
         //          because IDEA gives us back PSI representing the same content that are *not* equal.
-        if (isValidTypeScope(element) && (element !is LuaDocTagClass || currentScope.psi !is LuaDocTagClass)) {
+        if (element is LuaTypeScope && (element !is LuaDocTagClass || currentScope.psi !is LuaDocTagClass)) {
             push(create(element))
             traverseChildren(element)
             pop()
@@ -357,7 +335,7 @@ private abstract class ScopedTypeTree(val file: PsiFile) : LuaRecursiveVisitor()
     }
 }
 
-private class ScopedTypePsiTree(file: PsiFile) : ScopedTypeTree(file) {
+private class ScopedTypePsiTree(file: LuaPsiFile) : ScopedTypeTree(file) {
     override fun findScope(element: PsiElement): FoundScope? {
         var psi: PsiElement? = element
         var psiScopedType: LuaScopedType? = null
@@ -367,19 +345,21 @@ private class ScopedTypePsiTree(file: PsiFile) : ScopedTypeTree(file) {
                 psiScopedType = psi
             }
 
-            val candidatePsi = (psi as? LuaComment)?.tagClass ?: psi
+            val candidatePsi = if (psi is LuaComment) {
+                psi.tagClass ?: psi.owner ?: psi
+            } else {
+                psi
+            }
 
-            if (isValidTypeScope(candidatePsi)) {
-                var scope = candidatePsi.getUserData(scopeKey)
-
-                if (scope == null) {
+            val scope = (candidatePsi as? LuaTypeScope)?.let {
+                it.getUserData(scopeKey) ?: run {
                     buildTree(element.containingFile)
-                    scope = candidatePsi.getUserData(scopeKey)
+                    candidatePsi.getUserData(scopeKey)
                 }
+            }
 
-                return if (scope != null) {
-                    FoundScope(scope, psiScopedType?.let { scope.indexOf(psiScopedType) })
-                } else null
+            if (scope != null) {
+                return FoundScope(scope, psiScopedType?.let { scope.indexOf(psiScopedType) })
             }
 
             psi = psi.parent
@@ -389,7 +369,7 @@ private class ScopedTypePsiTree(file: PsiFile) : ScopedTypeTree(file) {
     }
 }
 
-private class ScopedTypeStubTree(file: PsiFile) : ScopedTypeTree(file) {
+private class ScopedTypeStubTree(file: LuaPsiFile) : ScopedTypeTree(file) {
     override fun shouldRebuild(): Boolean {
         return super.shouldRebuild() || (file as? LuaPsiFile)?.isContentsLoaded == true
     }
@@ -426,18 +406,51 @@ private class ScopedTypeStubTree(file: PsiFile) : ScopedTypeTree(file) {
                     psiScopedType = stubPsi
                 }
 
-                if (isValidTypeScope(stubPsi)) {
-                    val scope = stubPsi.getUserData(scopeKey)
-
-                    return if (scope != null) {
-                        FoundScope(scope, psiScopedType?.let { scope.indexOf(psiScopedType) })
-                    } else null
+                val scope = (stubPsi as? LuaTypeScope)?.let {
+                    it.getUserData(scopeKey) ?: run {
+                        buildTree(element.containingFile)
+                        stubPsi.getUserData(scopeKey)
+                    }
                 }
+
+                if (scope != null) {
+                    return FoundScope(scope, psiScopedType?.let { scope.indexOf(psiScopedType) })
+                }
+
 
                 stub = stub.parentStub
             }
         }
 
         return null
+    }
+}
+
+class ScopedTypeSubstitutor(context: SearchContext, val scope: LuaScopedTypeTreeScope) : TySubstitutor() {
+    override fun substitute(context: SearchContext, clazz: ITyClass): ITy {
+        return (clazz as? TyGenericParameter)?.let { genericParam ->
+            val scopedTy = scope.findName(context, genericParam.varName)?.type as? TyGenericParameter
+
+            if (scopedTy?.className == genericParam.className) {
+                // If the generic parameter we found is the same as the source, then we're within the scope in which the generic parameter is defined.
+                // In this scope, the generic parameter is a concrete (albeit unknown) type.
+                TyClass.createConcreteGenericParameter(genericParam)
+            } else {
+                genericParam
+            }
+
+        } ?: clazz
+    }
+
+    companion object {
+        fun substitute(context: SearchContext, ty: ITy): ITy {
+            context.element?.let { contextElement ->
+                LuaScopedTypeTree.get(contextElement.containingFile)?.findScope(contextElement)?.scope?.let { scope ->
+                    return ty.substitute(context, ScopedTypeSubstitutor(context, scope))
+                }
+            }
+
+            return ty
+        }
     }
 }
