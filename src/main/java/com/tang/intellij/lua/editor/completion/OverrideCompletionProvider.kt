@@ -40,14 +40,14 @@ class OverrideCompletionProvider : LuaCompletionProvider() {
         val methodDef = PsiTreeUtil.getParentOfType(id, LuaClassMethodDefStat::class.java)
         if (methodDef != null) {
             val context = SearchContext.get(methodDef.project)
-            val classType = methodDef.guessClassType(context)
+            val classType = methodDef.guessParentClass(context)
             if (classType != null) {
                 val memberNameSet = mutableSetOf<String>()
                 classType.processMembers(context, false) { _, m ->
                     m.name?.let { memberNameSet.add(it) }
                     true
                 }
-                Ty.processSuperClasses(classType, context) { sup ->
+                Ty.processSuperClasses(context, classType) { sup ->
                     val clazz = (if (sup is ITyGeneric) sup.base else sup) as? ITyClass
                     if (clazz != null) {
                         addOverrideMethod(completionParameters, completionResultSet, memberNameSet, clazz)
@@ -65,7 +65,7 @@ class OverrideCompletionProvider : LuaCompletionProvider() {
         LuaClassMemberIndex.processAll(context, TyLazyClass(clazzName)) { _, member ->
             member.name?.let { memberName ->
                 if (!memberNameSet.contains(memberName)) {
-                    if (member is LuaClassMethod<*>) {
+                    if (member is LuaTypeMethod<*>) {
                         val elementBuilder = LookupElementBuilder.create(memberName)
                             .withIcon(LuaIcons.CLASS_METHOD_OVERRIDING)
                             .withInsertHandler(OverrideInsertHandler(member.params, member.varargType != null))

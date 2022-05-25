@@ -19,8 +19,8 @@ import com.intellij.psi.tree.IElementType;
 
 public class LuaLocalFuncDefStatImpl extends StubBasedPsiElementBase<LuaLocalFuncDefStub> implements LuaLocalFuncDefStat {
 
-  public LuaLocalFuncDefStatImpl(@NotNull LuaLocalFuncDefStub stub, @NotNull IStubElementType type) {
-    super(stub, type);
+  public LuaLocalFuncDefStatImpl(@NotNull LuaLocalFuncDefStub stub, @NotNull IStubElementType<?, ?> nodeType) {
+    super(stub, nodeType);
   }
 
   public LuaLocalFuncDefStatImpl(@NotNull ASTNode node) {
@@ -90,8 +90,8 @@ public class LuaLocalFuncDefStatImpl extends StubBasedPsiElementBase<LuaLocalFun
 
   @Override
   @Nullable
-  public ITy guessReturnType(@NotNull SearchContext searchContext) {
-    return LuaPsiImplUtilKt.guessReturnType(this, searchContext);
+  public ITy guessReturnType(@NotNull SearchContext context) {
+    return LuaPsiImplUtilKt.guessReturnType(this, context);
   }
 
   @Override

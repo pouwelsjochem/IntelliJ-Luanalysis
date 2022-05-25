@@ -22,7 +22,6 @@ import com.intellij.lang.documentation.DocumentationProvider
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
-import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.comment.psi.LuaDocTagAlias
 import com.tang.intellij.lua.comment.psi.LuaDocTagClass
 import com.tang.intellij.lua.comment.psi.LuaDocTagField
@@ -49,7 +48,7 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
-        if (element is LuaTypeGuessable) {
+        if (element is LuaPsiTypeGuessable) {
             val ty = element.guessType(SearchContext.get(element.project))
             if (ty != null) {
                 return buildString {
@@ -68,7 +67,7 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
     }
 
     override fun getDocumentationElementForLink(psiManager: PsiManager, link: String, context: PsiElement?): PsiElement? {
-        return LuaClassIndex.find(link, SearchContext.get(psiManager.project))
+        return LuaClassIndex.find(SearchContext.get(psiManager.project), link)
     }
 
     override fun generateDoc(element: PsiElement, originalElement: PsiElement?): String? {
@@ -78,7 +77,7 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
             is LuaParamDef -> renderParamDef(sb, element)
             is LuaDocTagAlias -> renderAliasDef(sb, element, tyRenderer)
             is LuaDocTagClass -> renderClassDef(sb, element, tyRenderer)
-            is LuaClassMember -> renderClassMember(sb, element)
+            is LuaPsiTypeMember -> renderClassMember(sb, element)
             is LuaLocalDef -> { //local xx
 
                 renderDefinition(sb) {
@@ -103,12 +102,12 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
         return super<AbstractDocumentationProvider>.generateDoc(element, originalElement)
     }
 
-    private fun renderClassMember(sb: StringBuilder, parentTy: ITy?, classMember: LuaClassMember, context: SearchContext): Boolean {
+    private fun renderClassMember(context: SearchContext, sb: StringBuilder, parentTy: ITy?, classMember: LuaPsiTypeMember): Boolean {
         val effectiveMember = if (parentTy != null) {
             classMember.name?.let {
-                parentTy.findEffectiveMember(it, context)
+                parentTy.findEffectiveMember(context, it)
             } ?: classMember.guessIndexType(context)?.let {
-                parentTy.findEffectiveIndexer(it, context)
+                parentTy.findEffectiveIndexer(context, it)
             }
         } else {
             classMember
@@ -131,8 +130,8 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
                 if (parentTy != null) {
                     var renderedParentTy = if (parentTy is ITyArray) parentTy.base else parentTy
 
-                    if (renderedParentTy is TySerializedClass && renderedParentTy.className.endsWith(Constants.SUFFIX_CLASS_SELF)) {
-                        renderedParentTy = TySerializedClass(getNonSelfTypeName(renderedParentTy))
+                    if (renderedParentTy is TySerializedClass && isSuffixedClass(renderedParentTy)) {
+                        renderedParentTy = TySerializedClass(getSuffixlessClassName(renderedParentTy))
                     }
 
                     val parenthesesRequired = renderedParentTy is TyUnion || (renderedParentTy is TyGenericParameter && renderedParentTy.superClass != null)
@@ -214,20 +213,20 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
         return true
     }
 
-    private fun renderClassMember(sb: StringBuilder, classMember: LuaClassMember) {
+    private fun renderClassMember(sb: StringBuilder, classMember: LuaPsiTypeMember) {
         val context = SearchContext.get(classMember.project)
-        val parentType = (classMember.parent as? LuaTableExpr)?.shouldBe(context) ?: classMember.guessClassType(context)
+        val parentType = (classMember.parent as? LuaTableExpr)?.shouldBe(context) ?: classMember.guessParentClass(context)
 
         var memberRendered = false
 
         if (parentType != null) {
-            Ty.eachResolved(parentType, context) {
-                memberRendered = renderClassMember(sb, it, classMember, context) || memberRendered
+            Ty.eachResolved(context, parentType) {
+                memberRendered = renderClassMember(context, sb, it, classMember) || memberRendered
             }
         }
 
         if (!memberRendered) {
-            renderClassMember(sb, null, classMember, context)
+            renderClassMember(context, sb, null, classMember)
         }
     }
 
@@ -238,7 +237,7 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
         if (docParamDef != null) {
             renderDocParam(sb, docParamDef, tyRenderer, true)
         } else {
-            val ty = infer(paramDef, SearchContext.get(paramDef.project)) ?: Primitives.UNKNOWN
+            val ty = infer(SearchContext.get(paramDef.project), paramDef) ?: Primitives.UNKNOWN
             sb.append("<b>param</b> <code>${paramDef.name}</code> : ")
             renderTy(sb, ty, tyRenderer)
         }

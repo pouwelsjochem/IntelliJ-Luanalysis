@@ -33,12 +33,12 @@ import com.tang.intellij.lua.ty.*
 class IllegalOverrideInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean, session: LocalInspectionToolSession): PsiElementVisitor {
         return object : LuaVisitor() {
-            private fun inspectMember(context: SearchContext, superTy: ITy, member: LuaClassMember, sourceTy: ITy, source: LuaPsiElement) {
+            private fun inspectMember(context: SearchContext, superTy: ITy, member: LuaPsiTypeMember, sourceTy: ITy, source: LuaPsiElement) {
                 val indexTy = member.guessIndexType(context)
                 val superMember = if (indexTy != null) {
-                    superTy.findEffectiveIndexer(indexTy, context, true)
+                    superTy.findEffectiveIndexer(context, indexTy, true)
                 } else {
-                    member.name?.let { superTy.findEffectiveMember(it, context) }
+                    member.name?.let { superTy.findEffectiveMember(context, it) }
                 }
                 val superMemberTy = superMember?.guessType(context)
 
@@ -46,7 +46,7 @@ class IllegalOverrideInspection : LocalInspectionTool() {
                     val varianceFlags = if (source is LuaTableExpr) TyVarianceFlags.WIDEN_TABLES else 0
                     val fieldIdentifier = member.name?.let { "\"${it}\"" } ?: "[${indexTy!!.displayName}]"
 
-                    ProblemUtil.contravariantOf(superMemberTy, sourceTy, context, varianceFlags, null, source) { problem ->
+                    ProblemUtil.contravariantOf(context, superMemberTy, sourceTy, varianceFlags, null, source) { problem ->
                         val isPublic = superMember.visibility != Visibility.PROTECTED && superMember.visibility != Visibility.PRIVATE
 
                         val severity = if (isPublic) "Illegal" else "Incompatible"
@@ -121,7 +121,7 @@ class IllegalOverrideInspection : LocalInspectionTool() {
                 super.visitClassMethodDefStat(o)
 
                 val context = SearchContext.get(o.project)
-                val superTy = o.guessParentType(context).getSuperClass(context)
+                val superTy = o.guessParentType(context).getSuperType(context)
 
                 if (superTy == null) {
                     return
@@ -151,7 +151,7 @@ class IllegalOverrideInspection : LocalInspectionTool() {
                 }
 
                 val context = SearchContext.get(o.project)
-                val superTy = cls.getSuperClass(context)
+                val superTy = cls.getSuperType(context)
 
                 if (superTy == null) {
                     return

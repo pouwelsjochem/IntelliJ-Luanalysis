@@ -40,6 +40,7 @@ import com.tang.intellij.lua.psi.search.LuaOverridingMethodsSearch
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.index.LuaClassMemberIndex
 import com.tang.intellij.lua.ty.TyClass
+import com.tang.intellij.lua.ty.guessParentClass
 
 /**
  * line marker
@@ -52,16 +53,16 @@ class LuaLineMarkerProvider : LineMarkerProvider {
 
     private fun collectNavigationMarkers(element: PsiElement, result: MutableCollection<in LineMarkerInfo<*>>) {
         if (element is LuaClassMethodName) {
-            val methodDef = PsiTreeUtil.getParentOfType(element, LuaClassMethod::class.java)!!
+            val methodDef = PsiTreeUtil.getParentOfType(element, LuaTypeMethod::class.java)!!
             val project = methodDef.project
             val context = SearchContext.get(project)
-            val type = methodDef.guessClassType(context)
+            val type = methodDef.guessParentClass(context)
 
             //OverridingMethod
             val classMethodNameId = element.id
             if (type != null && classMethodNameId != null) {
                 val methodName = methodDef.name!!
-                var superType = type.getSuperClass(context)
+                var superType = type.getSuperType(context)
 
                 while (superType != null && superType is TyClass) {
                     ProgressManager.checkCanceled()
@@ -73,7 +74,7 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                         result.add(builder.createLineMarkerInfo(classMethodNameId))
                         break
                     }
-                    superType = superType.getSuperClass(context)
+                    superType = superType.getSuperType(context)
                 }
             }
 
@@ -85,7 +86,7 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                         classMethodNameId.textRange,
                         AllIcons.Gutter.OverridenMethod,
                         null,
-                        object : LuaLineMarkerNavigator<PsiElement, LuaClassMethod<*>>() {
+                        object : LuaLineMarkerNavigator<PsiElement, LuaTypeMethod<*>>() {
 
                             override fun getTitle(elt: PsiElement)
                                     = "Choose Overriding Method of ${methodDef.name}"

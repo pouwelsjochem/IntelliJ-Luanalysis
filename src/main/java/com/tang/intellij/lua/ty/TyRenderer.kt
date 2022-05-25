@@ -194,9 +194,16 @@ open class TyRenderer : TyVisitor(), ITyRenderer {
                 val context = SearchContext.get(clazz.table.project)
                 val list = mutableListOf<String>()
                 clazz.table.tableFieldList.forEach { field ->
-                    val key = field.name ?: "[${render(field.guessIndexType(context) ?: Primitives.VOID)}]"
+                    val name = field.name
+                    val indexTy = if (name == null) field.guessIndexType(context) else null
+                    val key = name ?: "[${render(indexTy ?: Primitives.VOID)}]"
                     field.valueType?.let { fieldValue ->
-                        val fieldTy = fieldValue.getType()
+                        val fieldTy = if (name != null) {
+                            clazz.guessMemberType(context, name)
+                        } else {
+                            clazz.guessIndexerType(context, indexTy!!)
+                        } ?: fieldValue.getType()
+
                         val renderedFieldTy = (fieldTy as? TyGenericParameter)?.varName ?: render(fieldTy)
                         list.add("${key}: ${renderedFieldTy}")
                     }
@@ -207,7 +214,13 @@ open class TyRenderer : TyVisitor(), ITyRenderer {
                 clazz.superClass?.let { "${clazz.varName} : ${it.displayName}" } ?: clazz.varName
             }
             clazz.isAnonymousTable -> renderType(Constants.WORD_TABLE)
-            clazz.isAnonymous && !clazz.className.endsWith(Constants.SUFFIX_CLASS_SELF) -> "[local ${clazz.varName}]"
+            clazz.isAnonymous -> {
+                if (isSuffixedClass(clazz)) {
+                    clazz.varName
+                } else {
+                    "[local ${clazz.varName}]"
+                }
+            }
             clazz.isGlobal -> "[global ${clazz.varName}]"
             else -> "${clazz.className}${renderParamsList(clazz.params?.map { it.toString() })}"
         }

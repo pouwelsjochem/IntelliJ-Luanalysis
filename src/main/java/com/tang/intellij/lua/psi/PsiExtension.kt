@@ -22,7 +22,6 @@ import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import com.intellij.psi.util.PsiTreeUtil
-import com.intellij.util.Processor
 import com.tang.intellij.lua.comment.LuaCommentUtil
 import com.tang.intellij.lua.comment.psi.LuaDocTagClass
 import com.tang.intellij.lua.comment.psi.LuaDocTagGenericList
@@ -71,11 +70,11 @@ private fun LuaExpression<*>.shouldBeInternal(context: SearchContext): ITy? {
         if (p2 is LuaAssignStat) {
             val receiver = p2.varExprList.getExpressionAt(0)
             if (receiver != null)
-                return infer(receiver, context)
+                return infer(context, receiver)
         } else if (p2 is LuaLocalDefStat) {
             val receiver = p2.localDefList.firstOrNull()
             if (receiver != null)
-                return infer(receiver, context)
+                return infer(context, receiver)
         } else if (p2 is LuaReturnStat) {
             val returnType = PsiTreeUtil.getChildrenOfTypeAsList(p2.comment, LuaDocTagTypeImpl::class.java).firstOrNull()
 
@@ -99,16 +98,16 @@ private fun LuaExpression<*>.shouldBeInternal(context: SearchContext): ITy? {
         val p2 = p1.parent
         if (p2 is LuaCallExpr) {
             val idx = p1.getIndexFor(this)
-            val fTy = infer(p2.expression, context)
+            val fTy = infer(context, p2.expression)
 
             if (fTy != null) {
                 var ret: ITy = Primitives.VOID
-                Ty.eachResolved(fTy, context) {
+                Ty.eachResolved(context, fTy) {
                     if (it is ITyFunction) {
                         var sig = it.matchSignature(context, p2)?.signature ?: it.mainSignature
-                        val substitutor = p2.createSubstitutor(sig, context)
-                        sig = sig.substitute(substitutor)
-                        ret = ret.union(sig.getArgTy(idx), context)
+                        val substitutor = p2.createSubstitutor(context, sig)
+                        sig = sig.substitute(context, substitutor)
+                        ret = ret.union(context, sig.getArgTy(idx))
                     }
                 }
                 return ret
@@ -126,15 +125,15 @@ private fun LuaExpression<*>.shouldBeInternal(context: SearchContext): ITy? {
 
             var fieldType: ITy = Primitives.VOID
 
-            Ty.eachResolved(tyTbl, context) { type ->
+            Ty.eachResolved(context, tyTbl) { type ->
                 val classFieldTy = p1.name?.let {
-                    type.guessMemberType(it, context)
+                    type.guessMemberType(context, it)
                 } ?: p1.guessIndexType(context)?.let {
-                    type.guessIndexerType(it, context)
+                    type.guessIndexerType(context, it)
                 }
 
                 if (classFieldTy != null) {
-                    fieldType = fieldType.union(classFieldTy, context)
+                    fieldType = fieldType.union(context, classFieldTy)
                 }
             }
 
@@ -146,7 +145,7 @@ private fun LuaExpression<*>.shouldBeInternal(context: SearchContext): ITy? {
 
 fun LuaExpression<*>.shouldBe(context: SearchContext): ITy? {
     return shouldBeInternal(context)?.let {
-        TyAliasSubstitutor.substitute(it, context)
+        TyAliasSubstitutor().substitute(context, it)
     }
 }
 
@@ -482,11 +481,11 @@ val LuaBinaryExpr.right: LuaExpression<*>? get() {
     return list.getOrNull(1)
 }
 
-fun LuaClassMethod<*>.findOverridingMethod(context: SearchContext): LuaClassMethod<*>? {
+fun LuaTypeMethod<*>.findOverridingMethod(context: SearchContext): LuaTypeMethod<*>? {
     val methodName = name ?: return null
-    val type = guessClassType(context) ?: return null
-    var superMethod: LuaClassMethod<*>? = null
-    Ty.processSuperClasses(type, context) { superType ->
+    val type = guessParentClass(context) ?: return null
+    var superMethod: LuaTypeMethod<*>? = null
+    Ty.processSuperClasses(context, type) { superType ->
         ProgressManager.checkCanceled()
         val superClass = (if (superType is ITyGeneric) superType.base else superType) as? ITyClass
         if (superClass != null) {

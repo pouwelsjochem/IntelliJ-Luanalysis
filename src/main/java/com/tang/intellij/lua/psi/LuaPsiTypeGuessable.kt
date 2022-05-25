@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017. tangzx(love.tangzx@qq.com)
+ * Copyright (c) 2021
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 
-package com.tang.intellij.lua.comment.psi;
+package com.tang.intellij.lua.psi;
 
-import com.tang.intellij.lua.psi.LuaNamedElement;
+import com.tang.intellij.lua.search.SearchContext
+import com.tang.intellij.lua.ty.ITy
+import com.tang.intellij.lua.ty.TypeGuessable
 
-/**
- *
- * Created by TangZX on 2016/11/29.
- */
-public interface LuaDocNamedElement extends LuaDocPsiElement, LuaNamedElement {
+interface LuaPsiTypeGuessable : LuaPsiElement, TypeGuessable {
+    override val psi: LuaPsiElement
+        get() = this
+
+    override fun guessType(context: SearchContext): ITy? {
+        return SearchContext.infer(context, this)
+    }
 }

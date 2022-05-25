@@ -19,8 +19,8 @@ import com.intellij.psi.tree.IElementType;
 
 public class LuaClassMethodDefStatImpl extends StubBasedPsiElementBase<LuaClassMethodDefStatStub> implements LuaClassMethodDefStat {
 
-  public LuaClassMethodDefStatImpl(@NotNull LuaClassMethodDefStatStub stub, @NotNull IStubElementType type) {
-    super(stub, type);
+  public LuaClassMethodDefStatImpl(@NotNull LuaClassMethodDefStatStub stub, @NotNull IStubElementType<?, ?> nodeType) {
+    super(stub, nodeType);
   }
 
   public LuaClassMethodDefStatImpl(@NotNull ASTNode node) {
@@ -112,8 +112,8 @@ public class LuaClassMethodDefStatImpl extends StubBasedPsiElementBase<LuaClassM
 
   @Override
   @Nullable
-  public ITy guessReturnType(@NotNull SearchContext searchContext) {
-    return LuaPsiImplUtilKt.guessReturnType(this, searchContext);
+  public ITy guessReturnType(@NotNull SearchContext context) {
+    return LuaPsiImplUtilKt.guessReturnType(this, context);
   }
 
   @Override
