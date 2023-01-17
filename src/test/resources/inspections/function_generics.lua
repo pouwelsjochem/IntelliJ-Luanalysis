@@ -335,10 +335,10 @@ local strictAnonymousShape = {a = 'specific string'}
 
 looseAnonymousShape = merge(looseAnonymousShape, strictAnonymousShape)
 looseAnonymousShape = merge(strictAnonymousShape, looseAnonymousShape)
-strictAnonymousShape = <error descr="Type mismatch. Required: 'table' Found: '{ a: string }'">merge(looseAnonymousShape, strictAnonymousShape)</error>
+strictAnonymousShape = <error descr="Type mismatch. Required: '{ a: \"specific string\" }' Found: '{ a: string }'">merge(looseAnonymousShape, strictAnonymousShape)</error>
 
 stringStringTable = merge(stringStringTable, {a = 'specific string'})
-stringStringTable = <error descr="Type mismatch. Required: 'table<string, string>' Found: 'table | table<string, string>'">merge(stringStringTable, strictAnonymousShape)</error>
+stringStringTable = <error descr="Type mismatch. Required: 'table<string, string>' Found: 'table<string, string> | { a: \"specific string\" }'">merge(stringStringTable, strictAnonymousShape)</error>
 
 ---@generic K, V
 ---@param a table<K, V>
@@ -453,7 +453,7 @@ function build(builder)
     return builder()
 end
 
-stringNumberTable = <error descr="Type mismatch. Required: 'table<string, number>' Found: 'table'">build(function()
+stringNumberTable = <error descr="Type mismatch. Required: 'table<string, number>' Found: '{ a: 1 }'">build(function()
     return {a = 1}
 end)</error>
 
@@ -542,7 +542,7 @@ local function simpleInlineWidening(thing, thing2)
 end
 
 looseFieldAShape = simpleInlineWidening({a = anyString}, {a = string1})
-strictfieldAShape = <error descr="Type mismatch. Required: 'StrictFieldAShape' Found: 'table'">simpleInlineWidening({a = anyString}, {a = string1})</error>
+strictfieldAShape = <error descr="Type mismatch. Required: 'StrictFieldAShape' Found: '{ a: string }'">simpleInlineWidening({a = anyString}, {a = string1})</error>
 strictfieldAShape = simpleInlineWidening({a = string1}, {a = string1})
 
 ---@generic T : string
@@ -556,7 +556,7 @@ end
 ---@type 'hi' | 'bye'
 local hiOrBye = implicitGenericSubstitution({a = 'hi'}, {a = 'bye'})
 string1 = <error descr="Type mismatch. Required: '\"string1\"' Found: '\"bye\" | \"hi\"'">implicitGenericSubstitution({a = 'hi'}, {a = 'bye'})</error>
-anyString = implicitGenericSubstitution({a = <error descr="Type mismatch. Required: 'T : string' Found: '\"hi\"'">'hi'</error>}, <error descr="Type mismatch. Missing member: 'a' of: '{ a: T }'">{b = 'nope'}</error>)
+anyString = implicitGenericSubstitution({a = 'hi'}, <error descr="Type mismatch. Missing member: 'a' of: '{ a: \"hi\" }'">{b = 'nope'}</error>)
 
 ---@generic T
 ---@param a T
@@ -699,3 +699,87 @@ function genericParamScopeIssue()
 
     genericParamScopeIssueSetup(a)
 end
+
+---@alias GenericAliasArray<V> V[]
+
+---@alias GenericAliasTableArray<V> table<number, V>
+
+---@alias GenericAliasAnonymousTableArray<V> { [number]: nil | V }
+
+---@shape GenericShapeArray<V>
+---@field [number] nil | V
+
+---@alias DeeplyNestedGeneric<X, Y> { a: { [1]: number, [2]: X }, b: (fun(): Y)[] }
+
+---@generic T
+---@param arg T[]
+---@return T
+local function takesGenericArray(arg) return arg[1] end
+
+---@generic T
+---@param arg GenericAliasArray<T>
+---@return T
+local function takesGenericAliasArray(arg) return arg[1] end
+
+---@generic T
+---@param arg GenericAliasTableArray<T>
+---@return T
+local function takesGenericAliasTableArray(arg) return arg[1] end
+
+---@generic T
+---@param arg GenericAliasAnonymousTableArray<T>
+---@return T
+local function takesGenericAliasAnonymousTableArray(arg) return --[[---@not nil]] arg[1] end
+
+---@generic T
+---@param arg GenericShapeArray<T>
+---@return T
+local function takesGenericShapeArray(arg) return --[[---@not nil]] arg[1] end
+
+---@generic S, T
+---@param arg DeeplyNestedGeneric<S, T>
+---@return S, T
+local function takesDeeplyNestedGeneric(arg)
+    return arg.a[2], arg.b()
+end
+
+aString = takesGenericArray({"foobar"})
+aString = takesGenericAliasArray({"foobar"})
+aString = takesGenericAliasTableArray({"foobar"})
+aString = takesGenericAliasAnonymousTableArray({"foobar"})
+aString = takesGenericShapeArray({"foobar"})
+
+local resolvedS, resolvedT = takesDeeplyNestedGeneric({
+    a = {
+        1,
+        "hi"
+    },
+    b = {
+        function()
+            return 1
+        end
+    }
+})
+
+anyString = resolvedS
+anyNumber = resolvedT
+anyString = <error descr="Type mismatch. Required: 'string' Found: 'number'">resolvedT</error>
+anyNumber = <error descr="Type mismatch. Required: 'number' Found: 'string'">resolvedS</error>
+
+---@type fun<K, V>(tab: table<K, V>): ((fun(tab: table<K, V>, k: K): (K, V)), K)
+local iteratish
+
+---@generic K1, V1
+---@param tab table<K1, V1>
+function iteratishIndirection(tab)
+return iteratish(tab)
+end
+
+local iterator, initialK = iteratishIndirection(numberStringTable)
+
+initialK = <error descr="Type mismatch. Required: 'number' Found: 'string'">anyString</error>
+initialK = anyNumber
+anyString = <error descr="Type mismatch. Required: 'string' Found: 'number'">initialK</error>
+anyNumber = initialK
+<error descr="Type mismatch. Required: 'string' Found: 'number'">anyString</error>, <error descr="Type mismatch. Required: 'number' Found: 'string'">anyNumber</error> = <error descr="Result 1, type mismatch. Required: 'string' Found: 'number'"><error descr="Result 2, type mismatch. Required: 'number' Found: 'string'">iterator(numberStringTable, initialK)</error></error>
+anyNumber, anyString = iterator(numberStringTable, initialK)

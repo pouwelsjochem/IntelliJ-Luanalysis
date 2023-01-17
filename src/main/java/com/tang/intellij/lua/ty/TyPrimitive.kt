@@ -22,11 +22,12 @@ import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.comment.psi.LuaDocPrimitiveTableTy
 import com.tang.intellij.lua.search.SearchContext
 
+// All primitive types: boolean, number, function, table, string (as per TyPrimitiveKind)
 interface ITyPrimitive : ITy {
     val primitiveKind: TyPrimitiveKind
 }
 
-// number, boolean, nil, void ...
+// boolean, number, function, table
 class TyPrimitive(override val primitiveKind: TyPrimitiveKind,
                   override val displayName: String) : Ty(TyKind.Primitive), ITyPrimitive {
 
@@ -36,7 +37,7 @@ class TyPrimitive(override val primitiveKind: TyPrimitiveKind,
         return other is ITyPrimitive && other.primitiveKind == primitiveKind
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (this === other) {
             return true
         }
@@ -49,13 +50,13 @@ class TyPrimitive(override val primitiveKind: TyPrimitiveKind,
         return primitiveKind.hashCode()
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        if (super.contravariantOf(context, other, flags)
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        if (super.contravariantOf(context, other, varianceFlags)
                 || (other is ITyPrimitive && other.primitiveKind == primitiveKind)) {
             return true
         }
 
-        if (flags and TyVarianceFlags.STRICT_UNKNOWN == 0) {
+        if (varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0) {
             if (primitiveKind == TyPrimitiveKind.Function && other.kind == TyKind.Function) {
                 return true
             }
@@ -71,10 +72,10 @@ class TyPrimitive(override val primitiveKind: TyPrimitiveKind,
         return false
     }
 
-    override fun guessMemberType(context: SearchContext, name: String): ITy? {
+    override fun guessMemberType(searchContext: SearchContext, name: String): ITy? {
         return if (primitiveKind == TyPrimitiveKind.Table) {
             Primitives.UNKNOWN
-        } else super<Ty>.guessMemberType(context, name)
+        } else super<Ty>.guessMemberType(searchContext, name)
     }
 
     override fun guessIndexerType(context: SearchContext, indexTy: ITy, exact: Boolean): ITy? {
@@ -102,7 +103,7 @@ open class TyPrimitiveClass(override val primitiveKind: TyPrimitiveKind,
         return other is ITyPrimitive && other.primitiveKind == primitiveKind
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (this === other) {
             return true
         }
@@ -115,9 +116,9 @@ open class TyPrimitiveClass(override val primitiveKind: TyPrimitiveKind,
         return primitiveKind.hashCode()
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
         return (other is ITyPrimitive && other.primitiveKind == primitiveKind) ||
-                super.contravariantOf(context, other, flags)
+                super.contravariantOf(context, other, varianceFlags)
     }
 
     override fun willResolve(context: SearchContext): Boolean {
@@ -151,20 +152,20 @@ object TyPrimitiveSerializer : TySerializer<ITy>() {
 }
 
 class TyDocPrimitiveTable(val luaDocPrimitiveTableTy: LuaDocPrimitiveTableTy) : TyPrimitiveClass(TyPrimitiveKind.Table, Constants.WORD_TABLE) {
-    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         return process(this, luaDocPrimitiveTableTy)
     }
 
-    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         return process(this, luaDocPrimitiveTableTy)
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        if (super.contravariantOf(context, other, flags)) {
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        if (super.contravariantOf(context, other, varianceFlags)) {
             return true
         }
 
-        if (flags and TyVarianceFlags.STRICT_UNKNOWN == 0) {
+        if (varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0) {
             val otherBase = if (other is ITyGeneric) other.base else other
             return other.kind == TyKind.Array
                     || otherBase.kind == TyKind.Class

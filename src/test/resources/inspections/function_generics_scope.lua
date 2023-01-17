@@ -75,3 +75,49 @@ local function scopedGenericAnnotatedReturnStatement(value)
         return value
     end
 end
+
+---@generic V
+---@param value V
+---@return V
+function recursiveConcreteness(value)
+    ---@type V
+    local v
+
+    value = v
+    v = value
+
+    local resultantVFromRecursiveCall = recursiveConcreteness(v)
+
+    v = resultantVFromRecursiveCall
+    resultantVFromRecursiveCall = v
+
+    ---@type boolean
+    local differentVForRecursiveCall
+    local resultantVFromDifferentVRecursiveCall = recursiveConcreteness(differentVForRecursiveCall)
+
+    differentVForRecursiveCall = resultantVFromDifferentVRecursiveCall
+    resultantVFromDifferentVRecursiveCall = differentVForRecursiveCall
+
+    v = <error descr="Type mismatch. Required: 'V' Found: 'boolean'">differentVForRecursiveCall</error>
+    v = <error descr="Type mismatch. Required: 'V' Found: 'boolean'">resultantVFromDifferentVRecursiveCall</error>
+
+    differentVForRecursiveCall = <error descr="Type mismatch. Required: 'boolean' Found: 'V'">v</error>
+    resultantVFromDifferentVRecursiveCall = <error descr="Type mismatch. Required: 'boolean' Found: 'V'">v</error>
+
+    return value
+end
+
+---@generic T
+---@param t T
+function anonymousGenericFieldAccessedFromExternalScope(t)
+    return {
+        a = t
+    }
+end
+
+---@type boolean
+local aBoolean
+local booleanFoo = anonymousGenericFieldAccessedFromExternalScope(aBoolean)
+
+aBoolean = booleanFoo.a
+booleanFoo.a = <error descr="Type mismatch. Required: 'boolean' Found: '\"not a boolean\"'">"not a boolean"</error>

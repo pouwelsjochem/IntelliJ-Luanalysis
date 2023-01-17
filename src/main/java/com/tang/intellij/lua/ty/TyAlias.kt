@@ -53,12 +53,12 @@ class TyAlias(override val name: String,
         return other is ITyAlias && other.name == name && other.flags == flags
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (this === other) {
             return true
         }
 
-        return ty.equals(context, other)
+        return ty.equals(context, other, equalityFlags)
     }
 
     override fun hashCode(): Int {
@@ -69,12 +69,12 @@ class TyAlias(override val name: String,
         return ty.processMembers(context, deep, process)
     }
 
-    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: ProcessTypeMember): Boolean {
-        return ty.processMember(context, name, deep, process)
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
+        return ty.processMember(context, name, deep, indexerSubstitutor, process)
     }
 
-    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: ProcessTypeMember): Boolean {
-        return ty.processIndexer(context, indexTy, exact, deep, process)
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
+        return ty.processIndexer(context, indexTy, exact, deep, indexerSubstitutor, process)
     }
 
     override fun accept(visitor: ITyVisitor) {
@@ -89,8 +89,8 @@ class TyAlias(override val name: String,
         return substitutor.substitute(context, this)
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        return ty.contravariantOf(context, other, flags) || super.contravariantOf(context, other, flags)
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        return ty.contravariantOf(context, other, varianceFlags) || super.contravariantOf(context, other, varianceFlags)
     }
 }
 

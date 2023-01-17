@@ -21,10 +21,11 @@ import com.intellij.psi.stubs.StubOutputStream
 import com.tang.intellij.lua.search.SearchContext
 
 
+// TODO: Should not be a Ty
 class TySnippet(val content: String) : Ty(TyKind.Snippet) {
     override fun toString() = content
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         return false
     }
 }

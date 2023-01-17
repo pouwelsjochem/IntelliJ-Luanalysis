@@ -23,31 +23,39 @@ import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.readTyNullable
 import com.tang.intellij.lua.stubs.writeTyNullable
-import com.tang.intellij.lua.ty.*
+import com.tang.intellij.lua.ty.ITy
+import com.tang.intellij.lua.ty.ITySubstitutor
+import com.tang.intellij.lua.ty.Primitives
+import com.tang.intellij.lua.ty.TyMultipleResults
 
 /**
  * parameter info
  * Created by tangzx on 2017/2/4.
  */
-class LuaParamInfo(val name: String, val ty: ITy?) {
+class LuaParamInfo(val name: String, val ty: ITy?, val optional: Boolean) {
 
     override fun equals(other: Any?): Boolean {
-        //only check ty
-        return other is LuaParamInfo && other.ty == ty
+        return other is LuaParamInfo && other.optional == optional && other.ty == ty
     }
 
-    fun equals(context: SearchContext, other: LuaParamInfo): Boolean {
+    fun equals(context: SearchContext, other: LuaParamInfo, equalityFlags: Int): Boolean {
         if (ty == null) {
             return other.ty == null
         } else if (other.ty == null) {
             return false
+        } else if (other.optional != optional) {
+            return false
         }
 
-        return ty.equals(context, other.ty)
+        return ty.equals(context, other.ty, equalityFlags)
     }
 
     override fun hashCode(): Int {
-        return ty.hashCode()
+        return if (optional) {
+            31 * ty.hashCode()
+        } else {
+            ty.hashCode()
+        }
     }
 
     fun substitute(context: SearchContext, substitutor: ITySubstitutor): LuaParamInfo {
@@ -58,23 +66,25 @@ class LuaParamInfo(val name: String, val ty: ITy?) {
             return this
         }
 
-        return LuaParamInfo(name, substitutedTy)
+        return LuaParamInfo(name, substitutedTy, optional)
     }
 
     companion object {
         fun createSelf(thisType: ITy? = null): LuaParamInfo {
-            return LuaParamInfo(Constants.WORD_SELF, thisType)
+            return LuaParamInfo(Constants.WORD_SELF, thisType, false)
         }
 
         fun deserialize(stubInputStream: StubInputStream): LuaParamInfo {
             val name = StringRef.toString(stubInputStream.readName())
             val ty = stubInputStream.readTyNullable()
-            return LuaParamInfo(name, ty)
+            val optional = stubInputStream.readBoolean()
+            return LuaParamInfo(name, ty, optional)
         }
 
         fun serialize(param: LuaParamInfo, stubOutputStream: StubOutputStream) {
             stubOutputStream.writeName(param.name)
             stubOutputStream.writeTyNullable(param.ty)
+            stubOutputStream.writeBoolean(param.optional)
         }
     }
 }

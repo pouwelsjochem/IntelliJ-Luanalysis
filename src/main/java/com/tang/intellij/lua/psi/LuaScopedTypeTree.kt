@@ -19,7 +19,6 @@ import com.intellij.openapi.util.Key
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
-import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.comment.LuaCommentUtil
 import com.tang.intellij.lua.comment.psi.*
 import com.tang.intellij.lua.comment.psi.api.LuaComment
@@ -31,6 +30,7 @@ import java.util.*
 open class FoundLuaScope(open val scope: LuaScopedTypeTreeScope, val psiScopedTypeIndex: Int? = null)
 
 interface LuaScopedTypeTreeScope {
+    val name: String
     val psi: PsiElement
     val tree: LuaScopedTypeTree
     val parent: LuaScopedTypeTreeScope?
@@ -78,6 +78,8 @@ interface LuaScopedTypeTree {
 }
 
 private class ScopedTypeTreeScope(override val psi: LuaTypeScope, override val tree: ScopedTypeTree, override val parent: ScopedTypeTreeScope?): LuaScopedTypeTreeScope {
+    override val name = psi.containingFile.getFileIdentifier() + "@" + psi.node.startOffset
+
     private val types = ArrayList<LuaScopedType>(0)
     private val childScopes = LinkedList<ScopedTypeTreeScope>()
 
@@ -151,7 +153,7 @@ private class ScopedTypeTreeScope(override val psi: LuaTypeScope, override val t
             val classTag = if (cls is TySerializedClass) {
                 LuaClassIndex.find(context, cls.className)
             } else if (cls is TyPsiDocClass) {
-                cls.tagClass
+                cls.psi
             } else null
 
             // Need to ensure we don't check the same scope *without* beforeIndex
@@ -426,20 +428,23 @@ private class ScopedTypeStubTree(file: LuaPsiFile) : ScopedTypeTree(file) {
     }
 }
 
-class ScopedTypeSubstitutor(context: SearchContext, val scope: LuaScopedTypeTreeScope) : TySubstitutor() {
-    override fun substitute(context: SearchContext, clazz: ITyClass): ITy {
-        return (clazz as? TyGenericParameter)?.let { genericParam ->
-            val scopedTy = scope.findName(context, genericParam.varName)?.type as? TyGenericParameter
+class ScopedTypeSubstitutor private constructor(context: SearchContext, val scope: LuaScopedTypeTreeScope) : TySubstitutor() {
+    override val name = "scoped:" + scope.name
 
-            if (scopedTy?.className == genericParam.className) {
+    val supportsConcreteGenerics = context.supportsConcreteGenerics
+
+    override fun substitute(context: SearchContext, clazz: ITyClass): ITy {
+        if (supportsConcreteGenerics && clazz is TyGenericParameter) {
+            val scopedTy = scope.findName(context, clazz.varName)?.type as? TyGenericParameter
+
+            if (scopedTy?.className == clazz.className) {
                 // If the generic parameter we found is the same as the source, then we're within the scope in which the generic parameter is defined.
                 // In this scope, the generic parameter is a concrete (albeit unknown) type.
-                TyClass.createConcreteGenericParameter(genericParam)
-            } else {
-                genericParam
+                return TyClass.createConcreteGenericParameter(clazz)
             }
+        }
 
-        } ?: clazz
+        return clazz
     }
 
     companion object {

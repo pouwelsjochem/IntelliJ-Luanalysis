@@ -38,7 +38,7 @@ interface IFunSignature {
     val paramSignature: String
 
     fun substitute(context: SearchContext, substitutor: ITySubstitutor): IFunSignature
-    fun equals(context: SearchContext, other: IFunSignature): Boolean
+    fun equals(context: SearchContext, other: IFunSignature, equalityFlags: Int): Boolean
     fun contravariantOf(context: SearchContext, other: IFunSignature, flags: Int): Boolean
 }
 
@@ -128,13 +128,13 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
         return false
     }
 
-    override fun equals(context: SearchContext, other: IFunSignature): Boolean {
+    override fun equals(context: SearchContext, other: IFunSignature, equalityFlags: Int): Boolean {
         if (colonCall != other.colonCall) {
             return false
         }
 
         val returnTyEqual = returnTy?.let {
-            other.returnTy?.equals(context, it) ?: false
+            other.returnTy?.equals(context, it, equalityFlags) ?: false
         } ?: (other.returnTy === null)
 
         if (!returnTyEqual) {
@@ -142,7 +142,7 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
         }
 
         val varargTyEqual = variadicParamTy?.let {
-            other.variadicParamTy?.equals(context, it) ?: false
+            other.variadicParamTy?.equals(context, it, equalityFlags) ?: false
         } ?: (other.variadicParamTy === null)
 
         if (!varargTyEqual) {
@@ -152,7 +152,7 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
         val paramsEqual = params?.let { params ->
             other.params?.let { otherParams ->
                 params.size == otherParams.size && otherParams.asSequence().zip(params.asSequence()).all { (param, otherParam) ->
-                    param.equals(context, otherParam)
+                    param.equals(context, otherParam, equalityFlags)
                 }
             } ?: false
         } ?: (other.params == null)
@@ -164,7 +164,7 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
         return genericParams?.let { params ->
             other.genericParams?.let { otherParams ->
                 params.size == otherParams.size && otherParams.asSequence().zip(params.asSequence()).all { (param, otherParam) ->
-                    param.equals(context, otherParam)
+                    param.equals(context, otherParam, equalityFlags)
                 }
             } ?: false
         } ?: (other.genericParams == null)
@@ -184,33 +184,12 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
     }
 
     override val displayName: String by lazy {
-        val namedParams = mutableListOf<Pair<String, ITy>>()
-
-        params?.forEach {
-            namedParams.add(Pair(it.name, it.ty ?: Primitives.UNKNOWN))
+        let { signature ->
+            buildString {
+                this.append("fun")
+                TyRenderer.SIMPLE.renderSignature(this, signature)
+            }
         }
-
-        variadicParamTy?.let {
-            namedParams.add(Pair("...", it))
-        }
-
-        val paramsText = namedParams.map {
-            val paramTy = it.second
-            val typeText = if (paramTy is TyGenericParameter && paramTy.superClass != null) {
-                "(${paramTy.displayName})"
-            } else paramTy.displayName
-            "${it.first}: ${typeText}"
-        }.joinToString(", ")
-
-        val paramsComponent = if (paramsText.length > 0) "(${paramsText})" else ""
-
-        val returnTypeName = returnTy?.let {
-            if (it is TyGenericParameter && it.superClass != null) {
-                "(${it.displayName})"
-            } else it.displayName
-        }
-
-        "fun${paramsComponent}${returnTypeName?.let {": " + it} ?: ""}"
     }
 
     override val paramSignature: String get() {
@@ -226,6 +205,7 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
 
     override fun substitute(context: SearchContext, substitutor: ITySubstitutor): IFunSignature {
         var paramsSubstituted = false
+
         val substitutedParams = params?.map {
             val substitutedParam = it.substitute(context, substitutor)
 
@@ -236,16 +216,26 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
             substitutedParam
         }
 
+        val substitutedGenericParams = genericParams?.map {
+                val substitutedGenericParam = it.substitute(context, substitutor)
+
+                if (substitutedGenericParam !== it) {
+                    paramsSubstituted = true
+                }
+
+                substitutedGenericParam
+            }?.filterIsInstance<TyGenericParameter>()?.toTypedArray()
+
         val substitutedReturnTy = returnTy?.substitute(context, substitutor)
         val substitutedVarargTy = variadicParamTy?.let { TyMultipleResults.getResult(context, it.substitute(context, substitutor)) }
 
         return if (paramsSubstituted || substitutedReturnTy !== returnTy || substitutedVarargTy !== variadicParamTy) {
             FunSignature(
-                    colonCall,
-                    substitutedReturnTy,
-                    substitutedParams?.toTypedArray(),
-                    substitutedVarargTy,
-                    genericParams
+                colonCall,
+                substitutedReturnTy,
+                substitutedParams?.toTypedArray(),
+                substitutedVarargTy,
+                substitutedGenericParams
             )
         } else {
             this
@@ -261,8 +251,28 @@ abstract class FunSignatureBase(override val colonCall: Boolean,
             }
 
             for (i in otherParams.indices) {
-                val param = it.getOrNull(i) ?: return false
-                val otherParamTy = otherParams[i].ty ?: Primitives.UNKNOWN
+                val param = it.getOrNull(i)
+                val otherParam = otherParams[i]
+
+                if (param == null) {
+                    if (otherParam.optional) {
+                        // Allows assignment of fun(str?: string) to fun().
+
+                        // Technically this is unsafe, since fun() is also assignable to fun(num?: number). However, it's useful, and TypeScript allow it, so
+                        // we'll follow suit.
+
+                        break
+                    } else {
+                        return false
+                    }
+                }
+
+                if (param.optional && !otherParam.optional && otherParam.ty != null) {
+                    return false
+                }
+
+                val otherParamTy = otherParam.ty ?: Primitives.UNKNOWN
+
                 if (!otherParamTy.contravariantOf(context, param.ty ?: Primitives.UNKNOWN, flags)) {
                     return false
                 }
@@ -321,16 +331,7 @@ interface ITyFunction : ITy {
 
 abstract class TyFunction : Ty(TyKind.Function), ITyFunction {
 
-    override fun equals(other: Any?): Boolean {
-        if (other is ITyFunction) {
-            if (mainSignature != other.mainSignature)
-                return false
-           return signatures.indices.none { signatures[it] != other.signatures.getOrNull(it) }
-        }
-        return false
-    }
-
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (this === other) {
             return true
         }
@@ -338,15 +339,24 @@ abstract class TyFunction : Ty(TyKind.Function), ITyFunction {
         val resolvedOther = Ty.resolve(context, other)
 
         if (resolvedOther is ITyFunction) {
-            if (!mainSignature.equals(context, resolvedOther.mainSignature))
+            if (!mainSignature.equals(context, resolvedOther.mainSignature, equalityFlags))
                 return false
 
             return signatures.size == resolvedOther.signatures.size
                     && signatures.asSequence().zip(resolvedOther.signatures.asSequence()).all { (signature, otherSignature) ->
-                signature.equals(context, otherSignature)
+                signature.equals(context, otherSignature, equalityFlags)
             }
         }
 
+        return false
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other is ITyFunction) {
+            if (mainSignature != other.mainSignature)
+                return false
+            return signatures.indices.none { signatures[it] != other.signatures.getOrNull(it) }
+        }
         return false
     }
 
@@ -358,8 +368,8 @@ abstract class TyFunction : Ty(TyKind.Function), ITyFunction {
         return code
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        if (super.contravariantOf(context, other, flags)) return true
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        if (super.contravariantOf(context, other, varianceFlags)) return true
 
         var matched = false
 
@@ -370,7 +380,7 @@ abstract class TyFunction : Ty(TyKind.Function), ITyFunction {
                         && (sig.params?.size ?: 0) == 0 && sig.variadicParamTy?.isUnknown == true
             } else {
                 other.processSignatures(context) { otherSig ->
-                    matched = sig.contravariantOf(context, otherSig, flags)
+                    matched = sig.contravariantOf(context, otherSig, varianceFlags)
                     !matched
                 }
             }
@@ -400,7 +410,7 @@ abstract class TyFunction : Ty(TyKind.Function), ITyFunction {
     }
 }
 
-class TyPsiFunction(private val colonCall: Boolean, val psi: LuaFuncBodyOwner<*>, flags: Int = 0) : TyFunction() {
+class TyPsiFunction(private val colonCall: Boolean, override val psi: LuaFuncBodyOwner<*>, flags: Int = 0) : TyFunction(), IPsiTy<LuaFuncBodyOwner<*>> {
     init {
         this.flags = flags
         if (colonCall) {
@@ -447,8 +457,8 @@ class TyPsiFunction(private val colonCall: Boolean, val psi: LuaFuncBodyOwner<*>
     }
 }
 
-class TyDocPsiFunction(func: LuaDocFunctionTy) : TyFunction() {
-    override val mainSignature: IFunSignature = TyDocFunSignature(func, false)
+class TyDocPsiFunction(override val psi: LuaDocFunctionTy) : TyFunction(), IPsiTy<LuaDocFunctionTy> {
+    override val mainSignature: IFunSignature = TyDocFunSignature(psi, false)
     override val signatures: Array<IFunSignature> = emptyArray()
 }
 

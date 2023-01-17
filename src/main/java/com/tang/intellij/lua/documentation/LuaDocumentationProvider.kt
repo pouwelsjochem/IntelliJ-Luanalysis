@@ -27,6 +27,7 @@ import com.tang.intellij.lua.comment.psi.LuaDocTagClass
 import com.tang.intellij.lua.comment.psi.LuaDocTagField
 import com.tang.intellij.lua.editor.completion.LuaDocumentationLookupElement
 import com.tang.intellij.lua.psi.*
+import com.tang.intellij.lua.search.PsiSearchContext
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.index.LuaClassIndex
 import com.tang.intellij.lua.ty.*
@@ -37,19 +38,20 @@ import com.tang.intellij.lua.ty.*
  */
 class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationProvider {
 
-    private val renderer: ITyRenderer = object: TyRenderer() {
-        override fun renderType(t: String): String {
+    private val renderer = object: TyRenderer() {
+        override fun renderTypeName(t: String): String {
             return if (t.isNotEmpty()) buildString { DocumentationManagerUtil.createHyperlink(this, t, t, true) } else t
         }
 
-        override fun renderParamsList(params: Collection<String>?): String {
+        override fun renderGenericParams(params: Collection<String>?): String {
             return if (params != null && params.isNotEmpty()) "&lt;${params.joinToString(", ")}&gt;" else ""
         }
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
         if (element is LuaPsiTypeGuessable) {
-            val ty = element.guessType(SearchContext.get(element.project))
+            val context = if (originalElement != null) PsiSearchContext(originalElement) else SearchContext.get(element.project)
+            val ty = element.guessType(context)
             if (ty != null) {
                 return buildString {
                     renderTy(this, ty, renderer)
@@ -74,16 +76,23 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
         val sb = StringBuilder()
         val tyRenderer = renderer
         when (element) {
-            is LuaParamDef -> renderParamDef(sb, element)
+            is LuaParamDef -> renderParamDef(sb, element, originalElement)
             is LuaDocTagAlias -> renderAliasDef(sb, element, tyRenderer)
             is LuaDocTagClass -> renderClassDef(sb, element, tyRenderer)
             is LuaPsiTypeMember -> renderClassMember(sb, element)
             is LuaLocalDef -> { //local xx
 
                 renderDefinition(sb) {
+                    val context = if (originalElement != null) PsiSearchContext(originalElement) else SearchContext.get(element.project)
+                    val ty = element.guessType(context) ?: Primitives.UNKNOWN
+
                     sb.append("local <b>${element.name}</b>: ")
-                    val ty = element.guessType(SearchContext.get(element.project)) ?: Primitives.UNKNOWN
-                    renderTy(sb, ty, tyRenderer)
+
+                    if (renderer.isMemberPunctuationRequired(ty)) {
+                        "(${renderTy(sb, ty, tyRenderer)})"
+                    } else {
+                        renderTy(sb, ty, tyRenderer)
+                    }
                 }
 
                 val owner = PsiTreeUtil.getParentOfType(element, LuaCommentOwner::class.java)
@@ -92,7 +101,8 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
             is LuaLocalFuncDefStat -> {
                 sb.wrapTag("pre") {
                     sb.append("local function <b>${element.name}</b>")
-                    val type = element.guessType(SearchContext.get(element.project)) as ITyFunction
+                    val context = if (originalElement != null) PsiSearchContext(originalElement) else SearchContext.get(element.project)
+                    val type = element.guessType(context) as ITyFunction
                     renderSignature(sb, type.mainSignature, tyRenderer)
                 }
                 renderComment(sb, element.comment, tyRenderer)
@@ -230,12 +240,14 @@ class LuaDocumentationProvider : AbstractDocumentationProvider(), DocumentationP
         }
     }
 
-    private fun renderParamDef(sb: StringBuilder, paramDef: LuaParamDef) {
+    private fun renderParamDef(sb: StringBuilder, paramDef: LuaParamDef, originalElement: PsiElement?) {
         val owner = PsiTreeUtil.getParentOfType(paramDef, LuaCommentOwner::class.java)
         val docParamDef = owner?.comment?.getParamDef(paramDef.name)
         val tyRenderer = renderer
+
         if (docParamDef != null) {
-            renderDocParam(sb, docParamDef, tyRenderer, true)
+            val withinImplementation = originalElement?.let { PsiTreeUtil.isAncestor(owner, it, true) } ?: false
+            renderDocParam(sb, docParamDef, withinImplementation, tyRenderer, true)
         } else {
             val ty = infer(SearchContext.get(paramDef.project), paramDef) ?: Primitives.UNKNOWN
             sb.append("<b>param</b> <code>${paramDef.name}</code> : ")

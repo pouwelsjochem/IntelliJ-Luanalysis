@@ -40,20 +40,20 @@ class TyPrimitiveLiteral private constructor(val primitiveKind: TyPrimitiveKind,
         }
     }
 
-    override fun getSuperType(context: SearchContext): ITy? {
+    override fun getSuperType(context: SearchContext): ITy {
         return primitiveType
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
         // Even when !LuaSettings.instance.isNilStrict, nil is never assignable to a primitive literal.
-        return this == other || (other.isUnknown && flags and TyVarianceFlags.STRICT_UNKNOWN == 0) || super.contravariantOf(context, other, flags)
+        return this == other || (other.isUnknown && varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0) || super.contravariantOf(context, other, varianceFlags)
     }
 
     override fun equals(other: Any?): Boolean {
         return other is TyPrimitiveLiteral && primitiveKind == other.primitiveKind && value.equals(other.value)
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (this === other) {
             return true
         }

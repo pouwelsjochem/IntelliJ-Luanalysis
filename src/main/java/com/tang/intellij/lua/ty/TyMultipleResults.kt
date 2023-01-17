@@ -76,7 +76,7 @@ class TyMultipleResults : Ty {
         list.forEach { it.accept(visitor) }
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
         val requiredSize = if (variadic) list.size - 1 else list.size
         val flattenedOther = TyMultipleResults.flatten(context, other)
 
@@ -97,7 +97,7 @@ class TyMultipleResults : Ty {
                     if (variadic) list.last() else return true
                 } else list[i]
 
-                if (!thisTy.contravariantOf(context, otherTy, flags)) {
+                if (!thisTy.contravariantOf(context, otherTy, varianceFlags)) {
                     return false
                 }
             }
@@ -105,15 +105,20 @@ class TyMultipleResults : Ty {
             return true
         }
 
-        return requiredSize <= 1 && list.first().contravariantOf(context, other, flags)
+        return requiredSize <= 1 && list.first().contravariantOf(context, other, varianceFlags)
     }
 
-    override fun hashCode(): Int {
-        var hash = if (variadic) 1 else 0
-        for (ty in list) {
-            hash = hash * 31 + ty.hashCode()
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
+        if (this === other) {
+            return true
         }
-        return hash
+
+        val resolvedOther = Ty.resolve(context, other)
+
+        return resolvedOther is TyMultipleResults
+                && resolvedOther.variadic == variadic
+                && resolvedOther.list.size == list.size
+                && resolvedOther.list.asSequence().zip(list.asSequence()).all { (otherTy, ty) -> otherTy.equals(context, ty, equalityFlags) }
     }
 
     override fun equals(other: Any?): Boolean {
@@ -128,17 +133,12 @@ class TyMultipleResults : Ty {
         return super.equals(other)
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
-        if (this === other) {
-            return true
+    override fun hashCode(): Int {
+        var hash = if (variadic) 1 else 0
+        for (ty in list) {
+            hash = hash * 31 + ty.hashCode()
         }
-
-        val resolvedOther = Ty.resolve(context, other)
-
-        return resolvedOther is TyMultipleResults
-                && resolvedOther.variadic == variadic
-                && resolvedOther.list.size == list.size
-                && resolvedOther.list.asSequence().zip(list.asSequence()).all { (otherTy, ty) -> otherTy.equals(context, ty) }
+        return hash
     }
 
     fun <R> convolve(context: SearchContext, other: TyMultipleResults, supportsMultipleResults: Boolean = false, transformer: (ITy, ITy?) -> R): Sequence<R> {

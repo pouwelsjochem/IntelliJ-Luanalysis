@@ -28,9 +28,12 @@ import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.codeInsight.inspection.MatchFunctionSignatureInspection
 import com.tang.intellij.lua.ext.recursionGuard
 import com.tang.intellij.lua.project.LuaSettings
-import com.tang.intellij.lua.psi.*
+import com.tang.intellij.lua.psi.LuaCallExpr
+import com.tang.intellij.lua.psi.LuaPsiElement
+import com.tang.intellij.lua.psi.LuaTableExpr
+import com.tang.intellij.lua.psi.argList
 import com.tang.intellij.lua.search.SearchContext
-import java.lang.IllegalStateException
+import conditionallyCached
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
@@ -48,7 +51,7 @@ enum class TyKind {
     MultipleResults,
     GenericParam,
     PrimitiveLiteral,
-    Snippet
+    Snippet // TODO: Remove
 }
 enum class TyPrimitiveKind {
     String,
@@ -67,6 +70,7 @@ class TyFlags {
         const val UNKNOWN = 0x20 // Unless STRICT_UNKNOWN is enabled, this type is covariant of all other types.
     }
 }
+
 class TyVarianceFlags {
     companion object {
         const val STRICT_UNKNOWN = 0x1 // When enabled UNKNOWN types are no longer treated as covariant of all types.
@@ -77,28 +81,48 @@ class TyVarianceFlags {
     }
 }
 
+class TyEqualityFlags {
+    companion object {
+        const val NON_STRUCTURAL = 0x1 // Treat shapes as classes i.e. a shape is only covariant of another shape if it explicitly inherits from it.
+
+        fun fromVarianceFlags(varianceFlags: Int): Int {
+            return if (varianceFlags and TyVarianceFlags.NON_STRUCTURAL != 0) {
+                TyEqualityFlags.NON_STRUCTURAL
+            } else {
+                0
+            }
+        }
+    }
+}
+
 data class SignatureMatchResult(val signature: IFunSignature?, val substitutedSignature: IFunSignature?, val returnTy: ITy)
 
 typealias ProcessTypeMember = (ownerTy: ITy, member: TypeMember) -> Boolean
+
+interface IPsiTy<T : LuaPsiElement> {
+    val psi: T
+}
 
 interface ITy : Comparable<ITy> {
     val kind: TyKind
 
     val displayName: String
 
+    val identifier get() = displayName
+
     val flags: Int
 
     val booleanType: ITy
 
-    fun equals(context: SearchContext, other: ITy): Boolean
+    fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean
 
     fun union(context: SearchContext, ty: ITy): ITy
 
     fun not(context: SearchContext, ty: ITy): ITy
 
-    fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean
+    fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean
 
-    fun covariantOf(context: SearchContext, other: ITy, flags: Int): Boolean
+    fun covariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean
 
     fun getSuperType(context: SearchContext): ITy?
 
@@ -172,7 +196,8 @@ interface ITy : Comparable<ITy> {
         return flags and TyFlags.SHAPE != 0
     }
 
-    fun guessMemberType(context: SearchContext, name: String): ITy? {
+    fun guessMemberType(searchContext: SearchContext, name: String): ITy? {
+        val context = if (isAnonymous) searchContext else searchContext.getProjectContext()
         val member = findEffectiveMember(context, name)
 
         if (member == null) {
@@ -189,7 +214,8 @@ interface ITy : Comparable<ITy> {
         } ?: Primitives.UNKNOWN
     }
 
-    fun guessIndexerType(context: SearchContext, indexTy: ITy, exact: Boolean = false): ITy? {
+    fun guessIndexerType(searchContext: SearchContext, indexTy: ITy, exact: Boolean = false): ITy? {
+        val context = searchContext.getProjectContext()
         var ty: ITy? = null
         val substitutor: Lazy<ITySubstitutor?> = lazy {
             getMemberSubstitutor(context)
@@ -228,9 +254,9 @@ interface ITy : Comparable<ITy> {
         }
     }
 
-    fun processMember(context: SearchContext, name: String, deep: Boolean = true, process: ProcessTypeMember): Boolean
+    fun processMember(context: SearchContext, name: String, deep: Boolean = true, indexerSubstitutor: ITySubstitutor? = null, process: ProcessTypeMember): Boolean
 
-    fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean = false, deep: Boolean = true, process: ProcessTypeMember): Boolean
+    fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean = false, deep: Boolean = true, indexerSubstitutor: ITySubstitutor? = null, process: ProcessTypeMember): Boolean
 
     fun processMembers(context: SearchContext, deep: Boolean = true, process: ProcessTypeMember): Boolean
 
@@ -311,13 +337,15 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
     val candidates = findCandidateSignatures(context, call)
     var fallbackReturnTy: ITy? = null
 
-    candidates.forEach {
+    var inexactMatch: SignatureMatchResult? = null
+
+    candidates.forEach { candidate ->
         var parameterCount = 0
         var candidateFailed = false
         val signatureProblems = if (problems != null) mutableListOf<Problem>() else null
 
-        val substitutor = call.createSubstitutor(context, it)
-        val signature = it.substitute(context, substitutor)
+        val substitutor = call.createSubstitutor(candidate)
+        val signature = candidate.substitute(context, substitutor)
 
         if (signature.params != null) {
             signature.processParameters(call) { i, pi ->
@@ -325,6 +353,10 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
                 val typeInfo = concreteArgTypes.getOrNull(i) ?: variadicArg
 
                 if (typeInfo == null || typeInfo == variadicArg) {
+                    if (pi.optional) {
+                        return@processParameters true
+                    }
+
                     var problemElement = call.lastChild.lastChild
 
                     // Some PSI elements injected by IntelliJ (e.g. PsiErrorElementImpl) can be empty and thus cannot be targeted for our own errors.
@@ -404,18 +436,24 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
                             candidateFailed = true
                         }
                     }
-                } else {
-                    if (parameterCount < args.size) {
-                        for (i in parameterCount until args.size) {
-                            candidateFailed = true
-                            signatureProblems?.add(Problem(null, args[i], "Too many arguments."))
-                        }
-                    } else {
-                        // Last argument is TyMultipleResults, just a weak warning.
-                        val excess = parameterCount - args.size
-                        val message = if (excess == 1) "1 result is an excess argument." else "${excess} results are excess arguments."
-                        signatureProblems?.add(Problem(null, args.last(), message, ProblemHighlightType.WEAK_WARNING))
+                } else if (parameterCount < args.size) {
+                    for (i in parameterCount until args.size) {
+                        candidateFailed = true
+                        signatureProblems?.add(Problem(null, args[i], "Too many arguments."))
                     }
+                } else {
+                    // Last argument is TyMultipleResults, just a weak warning.
+                    val excess = concreteArgTypes.size - parameterCount
+                    val message = if (excess == 1) "1 result is an excess argument." else "${excess} results are excess arguments."
+                    signatureProblems?.add(Problem(null, args.last(), message, ProblemHighlightType.WEAK_WARNING))
+
+                    inexactMatch.let {
+                        if (it?.signature == null || (signature.params?.size ?: 0) > (it.signature.params?.size ?: 0)) {
+                            inexactMatch = SignatureMatchResult(candidate, signature, signature.returnTy ?: TyMultipleResults(listOf(Primitives.UNKNOWN), true))
+                        }
+                    }
+
+                    candidateFailed = true
                 }
             } else if (varargParamTy != null && variadicArg != null) {
                 if (processProblem != null) {
@@ -438,7 +476,7 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
                 signatureProblems?.forEach(processProblem)
             }
 
-            return SignatureMatchResult(it, signature, signature.returnTy ?: TyMultipleResults(listOf(Primitives.UNKNOWN), true))
+            return SignatureMatchResult(candidate, signature, signature.returnTy ?: TyMultipleResults(listOf(Primitives.UNKNOWN), true))
         }
 
         if (fallbackReturnTy == null && signature.returnTy != Primitives.VOID) {
@@ -446,8 +484,20 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
         }
 
         if (signatureProblems != null) {
-            problems?.put(it, signatureProblems)
+            problems?.put(candidate, signatureProblems)
         }
+    }
+
+    val inexactMatchSignature = inexactMatch?.signature
+
+    if (inexactMatchSignature != null) {
+        val signatureProblems = problems?.get(inexactMatchSignature)
+
+        if (processProblem != null) {
+            signatureProblems?.forEach(processProblem)
+        }
+
+        return inexactMatch
     }
 
     if (processProblem != null) {
@@ -465,7 +515,7 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
         fallbackReturnTy = if (candidates.size > 0) {
             Primitives.VOID
         } else if (this is ITyFunction) {
-            val substitutor = call.createSubstitutor(context, mainSignature)
+            val substitutor = call.createSubstitutor(mainSignature)
             mainSignature.substitute(context, substitutor).returnTy ?: TyMultipleResults(listOf(Primitives.UNKNOWN), true)
         } else {
             var fallbackSignature: IFunSignature? = null
@@ -498,8 +548,9 @@ abstract class Ty(override val kind: TyKind) : ITy {
 
     final override var flags: Int = 0
 
-    override val displayName: String
-        get() = TyRenderer.SIMPLE.render(this)
+    override val displayName by conditionallyCached({ !(this is IPsiTy<*>) || !SearchContext.get(psi.project).isDumb }) {
+        TyRenderer.SIMPLE.render(this)
+    }
 
     // Lazy initialization because Primitives.TRUE is itself a Ty that needs to be instantiated and refers to itself.
     override val booleanType: ITy by lazy { Primitives.TRUE }
@@ -536,26 +587,38 @@ abstract class Ty(override val kind: TyKind) : ITy {
 
     override fun toString() = displayName
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        if ((other.kind == TyKind.Unknown && flags and TyVarianceFlags.STRICT_UNKNOWN == 0)
-            || (other.kind == TyKind.Nil && flags and TyVarianceFlags.STRICT_NIL == 0 && !LuaSettings.instance.isNilStrict)
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        if (((other.kind == TyKind.Unknown || other.isGlobal) && varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0)
+            || (other.kind == TyKind.Nil && varianceFlags and TyVarianceFlags.STRICT_NIL == 0 && !LuaSettings.instance.isNilStrict)
         ) {
             return true
         }
 
         val resolvedOther = resolve(context, other)
 
-        if (this.equals(context, resolvedOther)) {
+        if (varianceFlags and TyVarianceFlags.NON_STRUCTURAL == 0 && isShape(context)) {
+            val isContravariant: Boolean? = recursionGuard(resolvedOther, {
+                // Note: ProblemUtil.contravariantOfShape will call back into this method with
+                //       TyVarianceFlags.NON_STRUCTURAL set as a fast nominal check, before checking structurally.
+                ProblemUtil.contravariantOfShape(context, this, resolvedOther, varianceFlags)
+            })
+
+            if (isContravariant != null) {
+                return isContravariant
+            }
+        }
+
+        if (this.equals(context, resolvedOther, TyEqualityFlags.fromVarianceFlags(varianceFlags))) {
             return true
         }
 
         if (resolvedOther != other) {
-            return contravariantOf(context, resolvedOther, flags)
+            return contravariantOf(context, resolvedOther, varianceFlags)
         }
 
         if (resolvedOther is TyUnion) {
             TyUnion.each(resolvedOther) {
-                if (it !is TySnippet && !contravariantOf(context, it, flags)) {
+                if (it !is TySnippet && !contravariantOf(context, it, varianceFlags)) {
                     return false
                 }
             }
@@ -563,22 +626,12 @@ abstract class Ty(override val kind: TyKind) : ITy {
             return true
         }
 
-        if ((flags and TyVarianceFlags.NON_STRUCTURAL == 0 || other.isAnonymousTable) && isShape(context)) {
-            val isCovariant: Boolean? = recursionGuard(resolvedOther, {
-                ProblemUtil.contravariantOfShape(context, this, resolvedOther, flags)
-            })
-
-            if (isCovariant != null) {
-                return isCovariant
-            }
-        }
-
         val otherSuper = other.getSuperType(context)
-        return otherSuper != null && contravariantOf(context, otherSuper, flags)
+        return otherSuper != null && contravariantOf(context, otherSuper, varianceFlags)
     }
 
-    override fun covariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        return other.contravariantOf(context, this, flags)
+    override fun covariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        return other.contravariantOf(context, this, varianceFlags)
     }
 
     override fun getSuperType(context: SearchContext): ITy? {
@@ -620,11 +673,11 @@ abstract class Ty(override val kind: TyKind) : ITy {
         }
     }
 
-    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         return true
     }
 
-    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         return true
     }
 
@@ -716,13 +769,13 @@ abstract class Ty(override val kind: TyKind) : ITy {
         }
 
         fun processSuperClasses(context: SearchContext, start: ITy, processor: (ITy) -> Boolean): Boolean {
-            val processedName = mutableSetOf<String>()
+            val processedTys = mutableSetOf<ITy>()
             var cur: ITy? = start
 
             while (cur != null) {
                 ProgressManager.checkCanceled()
 
-                if (!processedName.add(cur.displayName)) {
+                if (!processedTys.add(cur)) {
                     return true
                 }
 
@@ -868,11 +921,7 @@ class TyUnknown : Ty(TyKind.Unknown) {
         this.flags = this.flags or TyFlags.UNKNOWN
     }
 
-    override fun equals(other: Any?): Boolean {
-        return other is TyUnknown
-    }
-
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (other === Primitives.UNKNOWN) {
             return true
         }
@@ -880,11 +929,15 @@ class TyUnknown : Ty(TyKind.Unknown) {
         return resolve(context, other) is TyUnknown
     }
 
+    override fun equals(other: Any?): Boolean {
+        return other is TyUnknown
+    }
+
     override fun hashCode(): Int {
         return Constants.WORD_ANY.hashCode()
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
         return other !is TyMultipleResults
     }
 
@@ -901,7 +954,7 @@ class TyNil : Ty(TyKind.Nil) {
 
     override val booleanType = Primitives.FALSE
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (other === Primitives.NIL) {
             return true
         }
@@ -909,14 +962,26 @@ class TyNil : Ty(TyKind.Nil) {
         return resolve(context, other) is TyNil
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        return other.kind == TyKind.Nil || super.contravariantOf(context, other, flags)
+    override fun equals(other: Any?): Boolean {
+        if (other === Primitives.NIL) {
+            return true
+        }
+
+        return other is TyNil
+    }
+
+    override fun hashCode(): Int {
+        return Constants.WORD_NIL.hashCode()
+    }
+
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        return other.kind == TyKind.Nil || super.contravariantOf(context, other, varianceFlags)
     }
 }
 
 class TyVoid : Ty(TyKind.Void) {
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         if (other === Primitives.VOID) {
             return true
         }
@@ -924,8 +989,20 @@ class TyVoid : Ty(TyKind.Void) {
         return resolve(context, other) is TyVoid
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        return other.kind == TyKind.Void || super.contravariantOf(context, other, flags)
+    override fun equals(other: Any?): Boolean {
+        if (other === Primitives.VOID) {
+            return true
+        }
+
+        return other is TyVoid
+    }
+
+    override fun hashCode(): Int {
+        return Constants.WORD_VOID.hashCode()
+    }
+
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        return other.kind == TyKind.Void || super.contravariantOf(context, other, varianceFlags)
     }
 }
 

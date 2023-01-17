@@ -31,20 +31,35 @@ import java.util.*
 
  * Created by tangzx on 2017/1/14.
  */
-abstract class SearchContext {
+abstract class SearchContext() {
     abstract val project: Project
     abstract val element: PsiElement?
+    abstract val identifier: String
+
+    open fun getProjectContext(): ProjectSearchContext {
+        return ProjectSearchContext(this)
+    }
 
     val index: Int get() = myIndex // Multiple results index
     val supportsMultipleResults: Boolean get() = myMultipleResults
+    val supportsConcreteGenerics: Boolean get() = myConcreteGenericSupport
 
-    private var myDumb = false
+    private var myDumb = contextStack.get().lastOrNull()?.isDumb ?: false
     private var myIndex = 0
     private var myMultipleResults = false
     private var myInStack = false
     private var myScope: GlobalSearchScope? = null
+    private var myConcreteGenericSupport = true
 
     private val myInferCache = mutableMapOf<LuaPsiTypeGuessable, ITy>()
+
+    protected constructor(sourceContext: SearchContext) : this() {
+        myDumb = sourceContext.myDumb
+        myIndex = sourceContext.myIndex
+        myMultipleResults = sourceContext.myMultipleResults
+        myInStack = sourceContext.myInStack
+        myScope = sourceContext.myScope
+    }
 
     fun <T> withIndex(index: Int, supportMultipleResults: Boolean = false, action: () -> T): T {
         val savedIndex = this.index
@@ -74,6 +89,14 @@ abstract class SearchContext {
         } else {
             withIndex(0, false, action)
         }
+    }
+
+    fun <T> withConcreteGenericSupport(support: Boolean, action: () -> T): T {
+        val savedConcreteGenericSupport = myConcreteGenericSupport
+        myConcreteGenericSupport = support
+        val ret = action()
+        myConcreteGenericSupport = savedConcreteGenericSupport
+        return ret
     }
 
     val scope get(): GlobalSearchScope {
@@ -111,14 +134,11 @@ abstract class SearchContext {
     }
 
     companion object {
-        private val threadLocal = object : ThreadLocal<Stack<SearchContext>>() {
-            override fun initialValue(): Stack<SearchContext> {
-                return Stack()
-            }
-        }
+        private val contextStack = ThreadLocal.withInitial { Stack<SearchContext>() }
 
         fun get(project: Project): SearchContext {
-            val stack = threadLocal.get()
+            val stack = contextStack.get()
+
             return if (stack.isEmpty()) {
                 ProjectSearchContext(project)
             } else {
@@ -143,7 +163,7 @@ abstract class SearchContext {
                 val result = action(ctx)
                 result
             } else {
-                val stack = threadLocal.get()
+                val stack = contextStack.get()
                 val size = stack.size
                 stack.push(ctx)
                 ctx.myInStack = true

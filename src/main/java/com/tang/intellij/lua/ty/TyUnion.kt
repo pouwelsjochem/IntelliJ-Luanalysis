@@ -21,7 +21,6 @@ import com.intellij.psi.stubs.StubOutputStream
 import com.tang.intellij.lua.ext.recursionGuard
 import com.tang.intellij.lua.search.SearchContext
 import java.util.*
-import kotlin.collections.ArrayList
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
 
@@ -110,9 +109,9 @@ class TyUnion : Ty {
         return TyUnion.union(context, resultantChildTys)
     }
 
-    override fun contravariantOf(context: SearchContext, other: ITy, flags: Int): Boolean {
-        return super.contravariantOf(context, other, flags)
-                || childSet.any { type -> type.contravariantOf(context, other, flags) }
+    override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
+        return super.contravariantOf(context, other, varianceFlags)
+                || childSet.any { type -> type.contravariantOf(context, other, varianceFlags) }
     }
 
     override fun substitute(context: SearchContext, substitutor: ITySubstitutor): ITy {
@@ -132,9 +131,9 @@ class TyUnion : Ty {
         } else this
     }
 
-    override fun processMember(context: SearchContext, name: String, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         childSet.forEach {
-            if (!it.processMember(context, name, deep, process)) {
+            if (!it.processMember(context, name, deep, indexerSubstitutor, process)) {
                 return false
             }
         }
@@ -142,9 +141,9 @@ class TyUnion : Ty {
         return true
     }
 
-    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, process: ProcessTypeMember): Boolean {
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
         childSet.forEach {
-            if (!it.processIndexer(context, indexTy, exact, deep, process)) {
+            if (!it.processIndexer(context, indexTy, exact, deep, indexerSubstitutor, process)) {
                 return false
             }
         }
@@ -172,7 +171,7 @@ class TyUnion : Ty {
         childSet.forEach { it.accept(visitor) }
     }
 
-    override fun equals(context: SearchContext, other: ITy): Boolean {
+    override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
         val resolvedTy = childSet.reduce { resolved, ty ->
             resolved.union(context, Ty.resolve(context, ty))
         }
@@ -196,7 +195,7 @@ class TyUnion : Ty {
         if (resolvedSet.size == resolvedOtherSet.size) {
             val allMembersMatch = resolvedSet.all { ty ->
                 resolvedOtherSet.contains(ty) || resolvedOtherSet.any { otherTy ->
-                    ty.equals(context, otherTy)
+                    ty.equals(context, otherTy, equalityFlags)
                 }
             }
 
@@ -209,7 +208,7 @@ class TyUnion : Ty {
     }
 
     override fun equals(other: Any?): Boolean {
-        return other is TyUnion && other.hashCode() == hashCode()
+        return other is TyUnion && childSet.equals(other.childSet)
     }
 
     override fun hashCode(): Int {
