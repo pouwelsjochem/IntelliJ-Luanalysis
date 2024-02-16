@@ -11,11 +11,9 @@
 -- WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 -- License for the specific language governing permissions and limitations under
 -- the License.
+
 ---@class std_Table
 local table = {}
-
----@class std__Table
-table = {}
 
 ---
 --- Given a list where all elements are strings or numbers, returns the string
