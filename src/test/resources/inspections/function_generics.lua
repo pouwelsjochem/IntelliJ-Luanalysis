@@ -22,6 +22,15 @@ local string1
 ---@type 1|"string1"
 local number1OrString1
 
+---@type number[]
+local numberArray
+
+---@type string[]
+local stringArray
+
+---@type (number | string)[]
+local stringOrNumberArray
+
 ---@generic T
 ---@param arg T
 local function fn(arg)
@@ -48,8 +57,8 @@ local function fn2(arg)
     local var = arg
 
     anyNumber = var
-    number1 = <error descr="Type mismatch. Required: '1' Found: 'T'">var</error>
-    anyString = <error descr="Type mismatch. Required: 'string' Found: 'T'">var</error>
+    number1 = <error descr="Type mismatch. Required: '1' Found: 'T : number'">var</error>
+    anyString = <error descr="Type mismatch. Required: 'string' Found: 'T : number'">var</error>
 end
 
 -- T = number
@@ -83,8 +92,8 @@ local function fn4(arg1, arg2)
 
     anyNumber = arg1
     anyNumber = arg2
-    number1 = <error descr="Type mismatch. Required: '1' Found: 'T'">arg1</error>
-    number1 = <error descr="Type mismatch. Required: '1' Found: 'T'">arg2</error>
+    number1 = <error descr="Type mismatch. Required: '1' Found: 'T : number'">arg1</error>
+    number1 = <error descr="Type mismatch. Required: '1' Found: 'T : number'">arg2</error>
 
     ---@type T
     local t
@@ -100,7 +109,7 @@ end
 fn4(number1, number2)
 
 -- T = number
-fn4(<error descr="Type mismatch. Required: 'T : number' Found: '1'">number1</error>, <error descr="Type mismatch. Required: 'T : number' Found: '\"string1\"'">string1</error>)
+fn4(number1, <error descr="Type mismatch. Required: 'T : number' Found: '\"string1\"'">string1</error>)
 
 
 
@@ -252,7 +261,7 @@ stringStringTable = <error descr="Type mismatch. Required: 'table<string, string
 
 ---@generic T : boolean
 local function fn10()
-    ---@generic <error descr="Generic parameters cannot be shadowed, 'T' was previously defined on line 253">T : string</error>
+    ---@generic <error descr="Generic parameters cannot be shadowed, 'T' was previously defined on line 262">T : string</error>
     local function fn10Nested(arg)
     end
 end
@@ -783,3 +792,41 @@ anyString = <error descr="Type mismatch. Required: 'string' Found: 'number'">ini
 anyNumber = initialK
 <error descr="Type mismatch. Required: 'string' Found: 'number'">anyString</error>, <error descr="Type mismatch. Required: 'number' Found: 'string'">anyNumber</error> = <error descr="Result 1, type mismatch. Required: 'string' Found: 'number'"><error descr="Result 2, type mismatch. Required: 'number' Found: 'string'">iterator(numberStringTable, initialK)</error></error>
 anyNumber, anyString = iterator(numberStringTable, initialK)
+
+---@generic A, B
+---@param a A[]
+---@param b B[]
+---@return (A | B)[]
+local function arrayWithUnionOfGenerics(a, b)
+    return {}
+end
+
+stringOrNumberArray = arrayWithUnionOfGenerics(numberArray, stringArray)
+stringArray = <error descr="Type mismatch. Required: 'string[]' Found: '(number | string)[]'">arrayWithUnionOfGenerics(numberArray, stringArray)</error>
+numberArray = <error descr="Type mismatch. Required: 'number[]' Found: '(number | string)[]'">arrayWithUnionOfGenerics(numberArray, stringArray)</error>
+
+stringOrNumberArray = arrayWithUnionOfGenerics(stringArray, numberArray)
+stringArray = <error descr="Type mismatch. Required: 'string[]' Found: '(number | string)[]'">arrayWithUnionOfGenerics(stringArray, numberArray)</error>
+numberArray = <error descr="Type mismatch. Required: 'number[]' Found: '(number | string)[]'">arrayWithUnionOfGenerics(stringArray, numberArray)</error>
+
+
+---@generic R
+---@param fn fun(resume: (fun(result: R): void)): void
+---@return R
+local function nestedFunctionParameterInference(fn)
+    ---@type R
+    local r
+
+    fn(function(userR)
+        r = userR
+    end)
+
+    return r
+end
+
+nestedFunctionParameterInference(
+    ---@param resume fun(result: number): void
+    function(resume)
+        resume(1)
+    end
+)

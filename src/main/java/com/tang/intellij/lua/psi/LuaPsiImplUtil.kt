@@ -76,8 +76,10 @@ fun getNameIdentifier(classMethodDefStat: LuaClassMethodDefStat): PsiElement? {
 
 fun getName(classMethodDefStat: LuaClassMethodDefStat): String? {
     val stub = classMethodDefStat.stub
-    if (stub != null)
+    if (stub != null) {
         return stub.name
+    }
+
     return getName(classMethodDefStat as PsiNameIdentifierOwner)
 }
 
@@ -200,8 +202,8 @@ fun getName(funcDefStat: LuaFuncDefStat): String? {
 
 fun getPresentation(funcDefStat: LuaFuncDefStat): ItemPresentation {
     return object : ItemPresentation {
-        override fun getPresentableText(): String {
-            return funcDefStat.name!! + funcDefStat.paramSignature
+        override fun getPresentableText(): String? {
+            return funcDefStat.name?.let { it + funcDefStat.paramSignature }
         }
 
         override fun getLocationString(): String {
@@ -696,9 +698,10 @@ fun getVisibility(member: LuaPsiTypeMember): Visibility {
         }
     }
     if (member is LuaCommentOwner) {
-        val comment = member.comment
-        comment?.findTag(LuaDocAccessModifier::class.java)?.let {
-            return Visibility.get(it.text)
+        member.comment?.let { comment ->
+            PsiTreeUtil.getChildOfType(comment, LuaDocAccessModifier::class.java)?.let {
+                return Visibility.get(it.text)
+            }
         }
     }
     return Visibility.PUBLIC
@@ -714,6 +717,10 @@ fun getExpression(element: StubBasedPsiElement<*>): LuaExpression<*>? {
 
 fun getExpression(callExpr: LuaCallExpr): LuaExpression<*> {
     return PsiTreeUtil.getStubChildOfType(callExpr, LuaExpression::class.java)!!
+}
+
+fun getNameExpr(classMethodName: LuaClassMethodName): LuaNameExpr {
+    return PsiTreeUtil.getStubChildOfType(classMethodName, LuaNameExpr::class.java)!!
 }
 
 fun getExpression(classMethodName: LuaClassMethodName): LuaExpression<*> {

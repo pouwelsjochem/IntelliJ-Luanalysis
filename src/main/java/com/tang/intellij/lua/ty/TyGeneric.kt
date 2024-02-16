@@ -21,6 +21,7 @@ import com.intellij.psi.stubs.StubOutputStream
 import com.intellij.util.io.StringRef
 import com.tang.intellij.lua.comment.psi.LuaDocGenericDef
 import com.tang.intellij.lua.comment.psi.LuaDocGenericTableTy
+import com.tang.intellij.lua.psi.LuaScopedTypeTree
 import com.tang.intellij.lua.psi.getFileIdentifier
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.stubs.readTyNullable
@@ -30,24 +31,31 @@ fun genericParameterName(def: LuaDocGenericDef): String {
     return "${def.id.text}@${def.node.startOffset}@${def.containingFile.getFileIdentifier()}"
 }
 
-class TyGenericParameter(name: String, override val varName: String, superClass: ITy? = null) : TySerializedClass(name, emptyArray(), varName, superClass, null) {
-    constructor(def: LuaDocGenericDef) : this(genericParameterName(def), def.id.text, def.superClass?.getType())
-
-    override fun equals(other: Any?): Boolean {
-        return other is TyGenericParameter && superClass?.equals(other.superClass) ?: (other.superClass == null)
-    }
+class TyGenericParameter(name: String, val scopeName: String?, override val varName: String, superClass: ITy? = null) : TySerializedClass(name, null, varName, superClass, null) {
+    constructor(def: LuaDocGenericDef) : this(
+        genericParameterName(def),
+        LuaScopedTypeTree.get(def.containingFile)?.findScope(def)?.scope?.name,
+        def.id.text,
+        def.superClass?.getType()
+    )
 
     override fun equals(context: SearchContext, other: ITy, equalityFlags: Int): Boolean {
-        return (other is TyGenericParameter
-                && superClass?.let { superClass ->
-            other.superClass?.let { otherSuperClass ->
-                superClass.equals(context, otherSuperClass, equalityFlags)
-            } ?: false
-        } ?: (other.superClass == null)) || super.equals(context, other, equalityFlags)
-    }
+        val abstract = context.abstractGenericScopeNames?.contains(scopeName) ?: false
 
-    override fun hashCode(): Int {
-        return super.hashCode() * 31 + (superClass?.hashCode() ?: 0)
+        if (abstract) {
+            val superEquals = (other is TyGenericParameter
+                && superClass?.let { superClass ->
+                other.superClass?.let { otherSuperClass ->
+                    superClass.equals(context, otherSuperClass, equalityFlags)
+                } ?: false
+            } ?: (other.superClass == null))
+
+            if (superEquals) {
+                return true
+            }
+        }
+
+        return super.equals(context, other, equalityFlags)
     }
 
     override val kind: TyKind
@@ -66,7 +74,9 @@ class TyGenericParameter(name: String, override val varName: String, superClass:
     }
 
     override fun contravariantOf(context: SearchContext, other: ITy, varianceFlags: Int): Boolean {
-        return if (varianceFlags and TyVarianceFlags.ABSTRACT_PARAMS != 0) {
+        val abstract = context.abstractGenericScopeNames?.contains(scopeName) ?: false
+
+        return if (abstract) {
             getSuperType(context)?.contravariantOf(context, other, varianceFlags) ?: true
         } else {
             super.contravariantOf(context, other, varianceFlags)
@@ -82,18 +92,37 @@ class TyGenericParameter(name: String, override val varName: String, superClass:
     override fun resolve(context: SearchContext, genericArgs: Array<out ITy>?): ITy {
         return this
     }
+
+    override fun substitute(context: SearchContext, substitutor: ITySubstitutor): ITy {
+        val substitutedTy = super.substitute(context, substitutor)
+
+        if (substitutedTy !== this) {
+            return substitutedTy
+        }
+
+        val superTy = getSuperType(context)
+        val substitutedSuperTy = superTy?.substitute(context, substitutor)
+
+        if (superTy !== substitutedSuperTy) {
+            return TyGenericParameter(className, scopeName, varName, substitutedSuperTy)
+        }
+
+        return this
+    }
 }
 
 object TyGenericParamSerializer : TySerializer<TyGenericParameter>() {
     override fun deserializeTy(flags: Int, stream: StubInputStream): TyGenericParameter {
         val className = StringRef.toString(stream.readName())
+        val scopeName = StringRef.toString(stream.readName())
         val varName = StringRef.toString(stream.readName())
         val superClass = stream.readTyNullable()
-        return TyGenericParameter(className, varName, superClass)
+        return TyGenericParameter(className, scopeName, varName, superClass)
     }
 
     override fun serializeTy(ty: TyGenericParameter, stream: StubOutputStream) {
         stream.writeName(ty.className)
+        stream.writeName(ty.scopeName)
         stream.writeName(ty.varName)
         stream.writeTyNullable(ty.superClass)
     }
@@ -110,7 +139,7 @@ interface ITyGeneric : ITyResolvable {
     override fun getMemberSubstitutor(context: SearchContext): ITySubstitutor {
         val resolvedBase = TyAliasSubstitutor.substitute(context, base)
         val baseParams = resolvedBase.getParams(context) ?: arrayOf()
-        val parameterSubstitutor = TyParameterSubstitutor.withArgs(baseParams, args)
+        val parameterSubstitutor = TyGenericParameterSubstitutor.withArgs(baseParams, args)
         return super.getMemberSubstitutor(context)?.let {
             TyChainSubstitutor.chain(it, parameterSubstitutor)
         } ?: parameterSubstitutor
@@ -187,7 +216,7 @@ open class TyGeneric(override val args: Array<out ITy>, override val base: ITy) 
             val baseParams = base.getParams(context)
 
             if (baseParams != null) {
-                return superClass.substitute(context, TyParameterSubstitutor.withArgs(baseParams, args))
+                return superClass.substitute(context, TyGenericParameterSubstitutor.withArgs(baseParams, args))
             }
         }
 
@@ -206,6 +235,43 @@ open class TyGeneric(override val args: Array<out ITy>, override val base: ITy) 
             }
 
             return false
+        }
+
+        var otherBase: ITy? = null
+        var otherArgs: Array<out ITy>? =  null
+        var contravariantParams = false
+
+        if (resolvedOther is ITyGeneric) {
+            otherBase = resolvedOther.base
+            otherArgs = resolvedOther.args
+        } else if (resolvedBase == Primitives.TABLE && args.size == 2) {
+            if (resolvedOther == Primitives.TABLE) {
+                return args.first().isUnknown && args.last().isUnknown
+            }
+
+            if (resolvedOther.isShape(context)) {
+                val genericTable = createTableGenericFromMembers(context, resolvedOther)
+                otherBase = genericTable.base
+                otherArgs = genericTable.args
+                contravariantParams = varianceFlags and TyVarianceFlags.WIDEN_TABLES != 0
+            }
+        } else if (resolvedOther is ITyClass) {
+            otherBase = resolvedOther
+            otherArgs = resolvedOther.getParams(context)
+        }
+
+        if (otherBase != null && otherBase.equals(context, resolvedBase, TyEqualityFlags.fromVarianceFlags(varianceFlags))) {
+            val baseArgCount = otherArgs?.size ?: 0
+            return baseArgCount == 0 || args.size == otherArgs?.size && args.asSequence().zip(otherArgs.asSequence()).all { (arg, otherArg) ->
+                // Args are always invariant as we don't support use-site variance nor immutable/read-only annotations
+                arg.equals(context, otherArg, TyEqualityFlags.fromVarianceFlags(varianceFlags))
+                    || (varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0 && otherArg.isUnknown)
+                    || (
+                    (contravariantParams ||
+                        (arg is TyGenericParameter && context.abstractGenericScopeNames?.contains(arg.scopeName) == true)
+                        )  && arg.contravariantOf(context, otherArg, varianceFlags)
+                    )
+            }
         }
 
         if (resolvedBase.isShape(context)) {
@@ -250,44 +316,6 @@ open class TyGeneric(override val args: Array<out ITy>, override val base: ITy) 
                     varianceFlags
                 )))
             } else false
-        }
-
-        var otherBase: ITy? = null
-        var otherArgs: Array<out ITy>? =  null
-        var contravariantParams = false
-
-        if (resolvedOther is ITyGeneric) {
-            otherBase = resolvedOther.base
-            otherArgs = resolvedOther.args
-        } else if (resolvedBase == Primitives.TABLE && args.size == 2) {
-            if (resolvedOther == Primitives.TABLE) {
-                return args.first().isUnknown && args.last().isUnknown
-            }
-
-            if (resolvedOther.isShape(context)) {
-                val genericTable = createTableGenericFromMembers(context, resolvedOther)
-                otherBase = genericTable.base
-                otherArgs = genericTable.args
-                contravariantParams = varianceFlags and TyVarianceFlags.WIDEN_TABLES != 0
-            }
-        } else if (resolvedOther is ITyClass) {
-            otherBase = resolvedOther
-            otherArgs = resolvedOther.getParams(context)
-        }
-
-        if (otherBase != null) {
-            if (otherBase.equals(context, resolvedBase, TyEqualityFlags.fromVarianceFlags(varianceFlags))) {
-                val baseArgCount = otherArgs?.size ?: 0
-                return baseArgCount == 0 || args.size == otherArgs?.size && args.asSequence().zip(otherArgs.asSequence()).all { (arg, otherArg) ->
-                    // Args are always invariant as we don't support use-site variance nor immutable/read-only annotations
-                    arg.equals(context, otherArg, TyEqualityFlags.fromVarianceFlags(varianceFlags))
-                            || (varianceFlags and TyVarianceFlags.STRICT_UNKNOWN == 0 && otherArg.isUnknown)
-                            || (
-                                (contravariantParams || (varianceFlags and TyVarianceFlags.ABSTRACT_PARAMS != 0 && arg is TyGenericParameter))
-                                && arg.contravariantOf(context, otherArg, varianceFlags)
-                            )
-                }
-            }
         }
 
         return super.contravariantOf(context, resolvedOther, varianceFlags)

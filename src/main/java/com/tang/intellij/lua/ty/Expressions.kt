@@ -22,7 +22,6 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.comment.psi.impl.LuaDocTagNotImpl
 import com.tang.intellij.lua.comment.psi.impl.LuaDocTagTypeImpl
-import com.tang.intellij.lua.ext.recursionGuard
 import com.tang.intellij.lua.lang.type.LuaNumber
 import com.tang.intellij.lua.lang.type.LuaString
 import com.tang.intellij.lua.project.LuaSettings
@@ -238,182 +237,176 @@ private fun guessBinaryOpType(context: SearchContext, binaryExpr: LuaBinaryExpr)
 
 fun LuaCallExpr.createSubstitutor(sig: IFunSignature): ITySubstitutor {
     val context = PsiSearchContext(this)
-    return context.withConcreteGenericSupport(false) {
-        val selfSubstitutor = TySelfSubstitutor(this)
-        val genericParams = sig.genericParams
+    val selfSubstitutor = TySelfSubstitutor(this)
+    val genericParams = sig.genericParams
 
-        if (genericParams?.isNotEmpty() == true) {
-            val list = mutableListOf<ITy>()
+    if (genericParams?.isNotEmpty() == true) {
+        val list = mutableListOf<ITy>()
 
-            // self type
-            if (this.isMethodColonCall) {
-                this.prefixExpression?.let { prefix ->
-                    context.withIndex(0) {
-                        list.add(prefix.guessType(context) ?: Primitives.UNKNOWN)
-                    }
-                }
-            }
-
-            for (i in 0 until argList.size - 1) {
+        // self type
+        if (this.isMethodColonCall) {
+            this.prefixExpression?.let { prefix ->
                 context.withIndex(0) {
-                    list.add(argList[i].guessType(context) ?: Primitives.UNKNOWN)
+                    list.add(prefix.guessType(context) ?: Primitives.UNKNOWN)
                 }
             }
-
-            argList.lastOrNull()?.let {
-                context.withMultipleResults {
-                    val lastArgTy = it.guessType(context) ?: Primitives.UNKNOWN
-
-                    if (lastArgTy is TyMultipleResults) {
-                        list.addAll(lastArgTy.list)
-                    } else {
-                        list.add(lastArgTy)
-                    }
-                }
-            }
-
-            val paramContext = (sig as? IPsiFunSignature)?.psi?.let { PsiSearchContext(it) } ?: context
-            val genericAnalyzer = GenericAnalyzer(genericParams, paramContext, this.args)
-
-            val lastParamIndex = list.lastIndex
-            var processedIndex = -1
-            sig.processParameters { index, param ->
-                val argTy = list.getOrNull(index)
-
-                if (argTy != null) {
-                    context.withListEntry(index == lastParamIndex) {
-                        genericAnalyzer.analyze(context, argTy, param.ty ?: Primitives.UNKNOWN)
-                    }
-                }
-
-                processedIndex = index
-                true
-            }
-
-            // vararg
-            val varargTy = sig.variadicParamTy
-            if (varargTy != null) {
-                for (index in processedIndex + 1 until list.size) {
-                    context.withListEntry(index == lastParamIndex) {
-                        genericAnalyzer.analyze(context, list[index], varargTy)
-                    }
-                }
-            }
-
-            val analyzedParams = genericAnalyzer.analyzedParams.toMutableMap()
-
-            sig.genericParams?.forEach {
-                val superCls = it.superClass
-                if (superCls != null && Ty.isInvalid(analyzedParams[it.className])) {
-                    analyzedParams[it.className] = superCls
-                }
-            }
-
-            return@withConcreteGenericSupport TyChainSubstitutor.chain(selfSubstitutor, TyParameterSubstitutor(analyzedParams))
         }
 
-        selfSubstitutor
+        for (i in 0 until argList.size - 1) {
+            context.withIndex(0) {
+                list.add(argList[i].guessType(context) ?: Primitives.UNKNOWN)
+            }
+        }
+
+        argList.lastOrNull()?.let {
+            context.withMultipleResults {
+                val lastArgTy = it.guessType(context) ?: Primitives.UNKNOWN
+
+                if (lastArgTy is TyMultipleResults) {
+                    list.addAll(lastArgTy.list)
+                } else {
+                    list.add(lastArgTy)
+                }
+            }
+        }
+
+        val paramContext = (sig as? IPsiFunSignature)?.psi?.let { PsiSearchContext(it) } ?: context
+        val genericAnalyzer = GenericAnalyzer(genericParams, paramContext, this.args)
+
+        val lastParamIndex = list.lastIndex
+        var processedIndex = -1
+        sig.processParameters { index, param ->
+            val argTy = list.getOrNull(index)
+
+            if (argTy != null) {
+                context.withListEntry(index == lastParamIndex) {
+                    genericAnalyzer.analyze(context, argTy, param.ty ?: Primitives.UNKNOWN)
+                }
+            }
+
+            processedIndex = index
+            true
+        }
+
+        // vararg
+        val varargTy = sig.variadicParamTy
+        if (varargTy != null) {
+            for (index in processedIndex + 1 until list.size) {
+                context.withListEntry(index == lastParamIndex) {
+                    genericAnalyzer.analyze(context, list[index], varargTy)
+                }
+            }
+        }
+
+        val analyzedParams = genericAnalyzer.analyzedParams.toMutableMap()
+
+        sig.genericParams?.forEach {
+            val superCls = it.superClass
+            if (superCls != null && Ty.isInvalid(analyzedParams[it.className])) {
+                analyzedParams[it.className] = superCls
+            }
+        }
+
+        return TyChainSubstitutor.chain(selfSubstitutor, TyGenericParameterSubstitutor(analyzedParams))
     }
+
+    return selfSubstitutor
 }
 
 private fun LuaCallExpr.infer(): ITy? {
     val context = PsiSearchContext(this)
-    return context.withConcreteGenericSupport(false) {
-        val luaCallExpr = this
-        // xxx()
-        val expr = luaCallExpr.expression
+    val luaCallExpr = this
+    // xxx()
+    val expr = luaCallExpr.expression
 
-        // require('module') resolution
-        // TODO: Lazy module type like TyLazyClass, but with file paths for use when context.isDumb
-        if (!context.isDumb && expr is LuaNameExpr && LuaSettings.isRequireLikeFunctionName(expr.name)) {
-            return@withConcreteGenericSupport (luaCallExpr.firstStringArg as? LuaLiteralExpr)?.stringValue?.let {
-                resolveRequireFile(it, luaCallExpr.project)
-            }?.let {
-                context.withMultipleResults {
-                    it.guessType(context)
-                }
+    // require('module') resolution
+    // TODO: Lazy module type like TyLazyClass, but with file paths for use when context.isDumb
+    if (!context.isDumb && expr is LuaNameExpr && LuaSettings.isRequireLikeFunctionName(expr.name)) {
+        return (luaCallExpr.firstStringArg as? LuaLiteralExpr)?.stringValue?.let {
+            resolveRequireFile(it, luaCallExpr.project)
+        }?.let {
+            context.withMultipleResults {
+                it.guessType(context)
             }
         }
-
-        var ret: ITy = Primitives.VOID
-
-        val ty = context.withIndex(0) {
-            infer(context, expr)
-        }
-
-        if (ty == null) {
-            return@withConcreteGenericSupport null
-        }
-
-        Ty.eachResolved(context, ty) {
-            if (ty == Primitives.FUNCTION) {
-                return@withConcreteGenericSupport TyMultipleResults(listOf(Primitives.UNKNOWN), true)
-            }
-
-            val signatureReturnTy = it.matchSignature(context, this)?.returnTy
-
-            if (signatureReturnTy == null) {
-                return@withConcreteGenericSupport null
-            }
-
-            ret = ret.union(context, signatureReturnTy)
-        }
-
-        ret
     }
+
+    var ret: ITy = Primitives.VOID
+
+    val ty = context.withIndex(0) {
+        infer(context, expr)
+    }
+
+    if (ty == null) {
+        return null
+    }
+
+    Ty.eachResolved(context, ty) {
+        if (ty == Primitives.FUNCTION) {
+            return TyMultipleResults(listOf(Primitives.UNKNOWN), true)
+        }
+
+        val signatureReturnTy = it.matchSignature(context, this)?.returnTy
+
+        if (signatureReturnTy == null) {
+            return null
+        }
+
+        ret = ret.union(context, signatureReturnTy)
+    }
+
+    return ret
 }
 
 private fun LuaNameExpr.infer(context: SearchContext): ITy? {
-    return recursionGuard(this, {
-        if (name == Constants.WORD_SELF) {
-            val methodDef = PsiTreeUtil.getStubOrPsiParentOfType(this, LuaClassMethodDefStat::class.java)
-            if (methodDef != null && !methodDef.isStatic) {
-                val methodName = methodDef.classMethodName
-                val expr = methodName.expression
-                val methodClassType = expr.guessType(context) as? ITyClass
+    if (name == Constants.WORD_SELF) {
+        val methodDef = PsiTreeUtil.getStubOrPsiParentOfType(this, LuaClassMethodDefStat::class.java)
+        if (methodDef != null && !methodDef.isStatic) {
+            val methodName = methodDef.classMethodName
+            val expr = methodName.expression
+            val methodClassType = expr.guessType(context) as? ITyClass
 
-                if (methodClassType != null) {
-                    return@recursionGuard TyClass.createSelfType(methodClassType)
-                }
+            if (methodClassType != null) {
+                return TyClass.createSelfType(methodClassType)
             }
         }
+    }
 
-        var ty = withSearchGuard(this) {
-            val multiResolve = multiResolve(context, this)
-            var maxTimes = 10
+    var ty = withSearchGuard(this) {
+        val multiResolve = multiResolve(context, this)
+        var maxTimes = 10
 
-            var type: ITy? = null
+        var type: ITy? = null
 
-            for (element in multiResolve) {
-                val set = getType(context, element)
+        for (element in multiResolve) {
+            val set = getType(context, element)
 
-                if (set == null) {
-                    type = null
-                    break
-                }
-
-                type = TyUnion.union(context, type, set)
-
-                if (--maxTimes == 0)
-                    break
+            if (set == null) {
+                type = null
+                break
             }
 
-            type
-        } ?: getType(context, this)
+            type = TyUnion.union(context, type, set)
 
-        // Global
-        if (ty == null && context.isDumb && this.isGlobal()) {
-            // In order to facilitate the extension of globals without needing to *explicitly* refer to the
-            // underlying global variable's class by name. Since we can't look up / resolve the global's variable's
-            // type during indexing, we instead attach members to a global type (identified by variable name). When
-            // we process a class' members later, we also process against its aliasName i.e. name of global variable.
-            // NOTE: We only need to hit this code path in "dumb mode" (i.e. during stub indexing) since that's where
-            //       we create/index class members. All other times, we'll leave the ty as nil (unknown).
-            ty = TyClass.createGlobalType(this)
+            if (--maxTimes == 0)
+                break
         }
 
-        ty
-    })
+        type
+    } ?: getType(context, this)
+
+    // Global
+    if (ty == null && context.isDumb && this.isGlobal()) {
+        // In order to facilitate the extension of globals without needing to *explicitly* refer to the
+        // underlying global variable's class by name. Since we can't look up / resolve the global's variable's
+        // type during indexing, we instead attach members to a global type (identified by variable name). When
+        // we process a class' members later, we also process against its aliasName i.e. name of global variable.
+        // NOTE: We only need to hit this code path in "dumb mode" (i.e. during stub indexing) since that's where
+        //       we create/index class members. All other times, we'll leave the ty as nil (unknown).
+        ty = TyClass.createGlobalType(this)
+    }
+
+    return ty
 }
 
 private fun getType(context: SearchContext, def: PsiElement): ITy? {
@@ -473,33 +466,35 @@ fun LuaLiteralExpr.infer(): ITy {
 }
 
 private fun LuaIndexExpr.infer(context: SearchContext): ITy? {
-    return recursionGuard(this, {
-        val indexExpr = this
+    val indexExpr = this
 
-        //from @type annotation
-        val docTy = indexExpr.docTy
-        if (docTy != null)
-            return@recursionGuard docTy
+    //from @type annotation
+    val docTy = indexExpr.docTy
 
-        //from value
-        var result: ITy? = null
-        val prefixType = indexExpr.guessParentType(context)
+    if (docTy != null) {
+        return docTy
+    }
 
-        Ty.eachResolved(context, prefixType) { ty ->
-            result = TyUnion.union(context, result, guessFieldType(context, indexExpr, ty))
-        }
+    //from value
+    var result: ITy? = null
+    val prefixType = context.withIndex(0) {
+        indexExpr.guessParentType(context)
+    }
 
-        if (result?.isUnknown != false) {
-            // xxx.yyy = zzz
-            result = indexExpr.assignStat?.let {
-                context.withIndex(it.getIndexFor(indexExpr), false) {
-                    it.valueExprList?.guessTypeAt(context)
-                }
+    Ty.eachResolved(context, prefixType) { ty ->
+        result = TyUnion.union(context, result, guessFieldType(context, indexExpr, ty))
+    }
+
+    if (result?.isUnknown != false) {
+        // xxx.yyy = zzz
+        result = indexExpr.assignStat?.let {
+            context.withIndex(it.getIndexFor(indexExpr), false) {
+                it.valueExprList?.guessTypeAt(context)
             }
         }
+    }
 
-        result
-    })
+    return result
 }
 
 private fun guessFieldType(context: SearchContext, indexExpr: LuaIndexExpr, ty: ITy): ITy? {

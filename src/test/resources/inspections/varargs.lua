@@ -232,3 +232,25 @@ local function acceptsVarString(...)
     SomeClassWantingArrays.acceptsNumberArray({<error descr="Type mismatch. Required: 'number' Found: 'string'">...</error>})
     acceptsNumberArray(<error descr="Type mismatch. Required: 'number[]' Found: 'string[]'">varargsToArray(...)</error>)
 end
+
+---@vararg fun(a: string, b: number): number
+local function acceptsFun(...)
+    local a = {...}
+    a[1]("a string", 1)
+    a[1]("a string", <error descr="Type mismatch. Required: 'number' Found: '\"a string\"'">"a string"</error>)
+end
+
+---@vararg string[]
+---@return string[]
+local function acceptStringArrays(...)
+    return {}
+end
+
+---@return string[], number
+local function returnsStringArrayAndNumber()
+    return { "a string" }, 1
+end
+
+---@type string[]
+local strArr = acceptStringArrays(<error descr="Type mismatch. Required: 'string[]' Found: 'number'">returnsStringArrayAndNumber()</error>)
+strArr = acceptStringArrays((returnsStringArrayAndNumber()))

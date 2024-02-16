@@ -56,7 +56,7 @@ private fun inferReturnTyInner(context: SearchContext, owner: LuaFuncBodyOwner<*
     }
 
     //infer from return stat
-    return withRecursionGuard("inferReturnTyInner", owner) {
+    return withRecursionGuard("inferReturnTyInner", owner, context.isDumb) {
         var type: ITy? = Primitives.VOID
 
         owner.acceptChildren(object : LuaRecursiveVisitor() {
@@ -66,14 +66,12 @@ private fun inferReturnTyInner(context: SearchContext, owner: LuaFuncBodyOwner<*
                 }
 
                 val c = PsiSearchContext(o)
-                val returnTy = c.withConcreteGenericSupport(false) {
-                    if (context.index != 0 || context.supportsMultipleResults) {
-                        c.withIndex(context.index, context.supportsMultipleResults) {
-                            guessReturnType(o, c)
-                        }
-                    } else {
+                val returnTy = if (context.index != 0 || context.supportsMultipleResults) {
+                    c.withIndex(context.index, context.supportsMultipleResults) {
                         guessReturnType(o, c)
                     }
+                } else {
+                    guessReturnType(o, c)
                 }
 
                 if (returnTy == null) {
@@ -151,10 +149,8 @@ private fun LuaLocalDef.infer(context: SearchContext): ITy? {
             type = if (exprList != null) {
                 // TODO: unknown vs. any - should be unknown
                 val localContext = PsiSearchContext(localStat)
-                localContext.withConcreteGenericSupport(context.supportsConcreteGenerics) {
-                    localContext.withIndex(index, false) {
-                        exprList.guessTypeAt(localContext)
-                    }
+                localContext.withIndex(index, false) {
+                    exprList.guessTypeAt(localContext)
                 } ?: Primitives.UNKNOWN
             } else {
                 val stub = this.stub
@@ -282,30 +278,26 @@ private fun resolveParamType(context: SearchContext, paramDef: LuaParamDef): ITy
 
     when (paramOwner) {
         is LuaClassMethodDefStat -> {
-            val classType = paramOwner.guessParentClass(context)
-            val methodName = paramOwner.name
+            val effectiveMember = paramOwner.guessParentClass(context)?.let { parentClass ->
+                paramOwner.name?.let { name -> parentClass.findEffectiveMember(context, name) }
+            }
 
-            if (classType != null && methodName != null) {
-                Ty.processSuperClasses(context, classType) { superType ->
-                    val superClass = (if (superType is ITyGeneric) superType.base else superType) as? ITyClass
-                    val superMethod = superClass?.findMember(context, methodName)
+            if (effectiveMember != null && effectiveMember != paramOwner) {
+                val param = (effectiveMember.guessType(context) as? ITyFunction)?.let {
+                    it.mainSignature.params?.getOrNull(paramOwner.getIndexFor(paramDef))
+                }
+                param?.ty?.let { paramTy ->
+                    val contextElement = context.element
 
-                    // TODO: Optionalalalallalalala
-
-                    if (superMethod is LuaTypeMethod<*>) {
-                        val params = superMethod.params
-
-                        for (param in params) {
-                            if (paramName == param.name) {
-                                ty = param.ty
-
-                                if (ty != null) {
-                                    return@processSuperClasses false
-                                }
-                            }
-                        }
+                    return if (param.optional
+                        && contextElement != null
+                        && PsiTreeUtil.isAncestor(paramOwner, contextElement, true)
+                    ) {
+                        // Within the scope of a function, optional parameters may be nil
+                        paramTy.union(context, Primitives.NIL)
+                    } else {
+                        paramTy
                     }
-                    true
                 }
             }
         }
@@ -373,22 +365,20 @@ private fun resolveParamType(context: SearchContext, paramDef: LuaParamDef): ITy
              * guess type for p1
              */
 
-            context.withConcreteGenericSupport(true) {
-                paramOwner.shouldBe(context)?.let {
-                    Ty.eachResolved(context, it) {
-                        if (it is ITyFunction) {
-                            val paramIndex = paramOwner.getIndexFor(paramDef)
-                            val param = it.mainSignature.params?.getOrNull(paramIndex)
-                            val paramTy = param?.let {
-                                if (it.optional) {
-                                    TyUnion.union(context, Primitives.NIL, it.ty)
-                                } else {
-                                    it.ty
-                                }
-                            } ?: Primitives.UNKNOWN // TODO: Any vs unknown. Should be unknown
+            paramOwner.shouldBe(context)?.let {
+                Ty.eachResolved(context, it) {
+                    if (it is ITyFunction) {
+                        val paramIndex = paramOwner.getIndexFor(paramDef)
+                        val param = it.mainSignature.params?.getOrNull(paramIndex)
+                        val paramTy = param?.let {
+                            if (it.optional) {
+                                TyUnion.union(context, Primitives.NIL, it.ty)
+                            } else {
+                                it.ty
+                            }
+                        } ?: Primitives.UNKNOWN // TODO: Any vs unknown. Should be unknown
 
-                            ty = TyUnion.union(context, ty, paramTy)
-                        }
+                        ty = TyUnion.union(context, ty, paramTy)
                     }
                 }
             }

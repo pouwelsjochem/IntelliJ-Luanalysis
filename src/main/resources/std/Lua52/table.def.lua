@@ -14,6 +14,9 @@
 ---@class std_Table
 local table = {}
 
+---@class std__Table
+table = {}
+
 ---
 --- Given a list where all elements are strings or numbers, returns the string
 --- `list[i]..sep..list[i+1] ... sep..list[j]`. The default value for

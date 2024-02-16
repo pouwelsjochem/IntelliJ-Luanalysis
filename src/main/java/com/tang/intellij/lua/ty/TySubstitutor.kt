@@ -18,7 +18,6 @@ package com.tang.intellij.lua.ty
 
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.RecursionManager.doPreventingRecursion
-import com.tang.intellij.lua.project.LuaSettings
 import com.tang.intellij.lua.psi.*
 import com.tang.intellij.lua.search.PsiSearchContext
 import com.tang.intellij.lua.search.SearchContext
@@ -46,7 +45,7 @@ class GenericAnalyzer(
     }
 
     private val genericParamResolutionSubstitutor = GenericParameterResolutionSubstitutor()
-    private val paramSubstitutor = TyParameterSubstitutor(paramTyMap)
+    private val paramSubstitutor = TyGenericParameterSubstitutor(paramTyMap)
     private var context = paramContext
 
     private var cur: ITy = Primitives.VOID
@@ -70,9 +69,11 @@ class GenericAnalyzer(
     }
 
     private fun varianceFlags(ty: ITy): Int {
-        return if (isInlineTable(ty)) {
-            TyVarianceFlags.STRICT_UNKNOWN or TyVarianceFlags.WIDEN_TABLES
-        } else TyVarianceFlags.STRICT_UNKNOWN
+        return TyVarianceFlags.STRICT_UNKNOWN or TyVarianceFlags.STRICT_NIL or if (isInlineTable(ty)) {
+            TyVarianceFlags.WIDEN_TABLES
+        } else {
+            0
+        }
     }
 
     private fun accept(ty: ITy) {
@@ -130,9 +131,11 @@ class GenericAnalyzer(
     fun analyze(context: SearchContext, arg: ITy, par: ITy) {
         this.context = context
 
-        cur = arg
-        warp(cur) { accept(Ty.resolve(context, par)) }
-        cur = Primitives.VOID
+        context.withAbstractGenericScopeName(genericMap.values.first().scopeName) {
+            cur = arg
+            warp(cur) { accept(Ty.resolve(context, par)) }
+            cur = Primitives.VOID
+        }
     }
 
     override fun visitAlias(alias: ITyAlias) {
@@ -173,8 +176,6 @@ class GenericAnalyzer(
             val genericParam = genericMap.get(genericName)
 
             if (genericParam != null) {
-                val isNilStrict = LuaSettings.instance.isNilStrict
-
                 Ty.eachResolved(context, cur) {
                     val mappedType = paramTyMap.get(genericName)
                     val currentType = it.substitute(paramContext, paramSubstitutor)
@@ -183,12 +184,10 @@ class GenericAnalyzer(
                     paramTyMap[genericName] = if (substitutedGenericParam.contravariantOf(
                             context,
                             currentType,
-                            TyVarianceFlags.ABSTRACT_PARAMS or TyVarianceFlags.STRICT_UNKNOWN
+                            TyVarianceFlags.STRICT_UNKNOWN
                         )) {
                         if (mappedType == null) {
                             currentType
-                        } else if (!isNilStrict && currentType is TyNil) {
-                            mappedType.union(context, Primitives.NIL)
                         } else if (mappedType.contravariantOf(context, currentType, varianceFlags(currentType))) {
                             mappedType
                         } else if (currentType.contravariantOf(context, mappedType, varianceFlags(mappedType))) {
@@ -286,6 +285,16 @@ class GenericAnalyzer(
     }
 
     private fun visitSig(arg: IFunSignature, par: IFunSignature) {
+        par.params?.let { parParams ->
+            arg.params?.asSequence()?.zip(parParams.asSequence())?.forEach { (argParam, parParam) ->
+                if (argParam.ty != null) {
+                    warp(argParam.ty) {
+                        accept(Ty.resolve(context, parParam.ty ?: Primitives.UNKNOWN))
+                    }
+                }
+            }
+        }
+
         arg.returnTy?.let {
             warp(it) {
                 par.returnTy?.let {
@@ -432,15 +441,6 @@ class GenericParameterResolutionSubstitutor : TySubstitutor() {
     override val name = "GenericParameterResolutionSubstitutor"
 
     override fun substitute(context: SearchContext, clazz: ITyClass): ITy {
-        if (clazz is TyGenericParameter) {
-            val superTy = clazz.getSuperType(context)
-            val substitutedSuperTy = clazz.getSuperType(context)?.substitute(context, this)
-
-            if (superTy !== substitutedSuperTy) {
-                return TyGenericParameter(clazz.className, clazz.varName, substitutedSuperTy)
-            }
-        }
-
         if (clazz.willResolve(context)) {
             return doPreventingRecursion(clazz.className, false) {
                 Ty.resolve(context, clazz).substitute(context, this)
@@ -451,7 +451,7 @@ class GenericParameterResolutionSubstitutor : TySubstitutor() {
     }
 }
 
-class TyParameterSubstitutor(val map: Map<String, ITy>) : TySubstitutor() {
+class TyGenericParameterSubstitutor(val map: Map<String, ITy>) : TySubstitutor() {
     override val name = "TyParameterSubstitutor"
 
     override fun substitute(context: SearchContext, clazz: ITyClass): ITy {
@@ -488,7 +488,7 @@ class TyParameterSubstitutor(val map: Map<String, ITy>) : TySubstitutor() {
     }
 
     companion object {
-        fun withArgs(params: Array<out TyGenericParameter>, args: Array<out ITy>): TyParameterSubstitutor {
+        fun withArgs(params: Array<out TyGenericParameter>, args: Array<out ITy>): TyGenericParameterSubstitutor {
             val paramMap = mutableMapOf<String, ITy>()
             val lastIndex = minOf(params.size, args.size) - 1
 
@@ -497,7 +497,7 @@ class TyParameterSubstitutor(val map: Map<String, ITy>) : TySubstitutor() {
                 paramMap[param.className] = args[index]
             }
 
-            return TyParameterSubstitutor(paramMap)
+            return TyGenericParameterSubstitutor(paramMap)
         }
     }
 }

@@ -13,7 +13,7 @@
 -- the License.
 
 ---@class std_Os
-local os = {}
+os = {}
 
 ---
 --- Returns an approximation of the amount in seconds of CPU time used by

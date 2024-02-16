@@ -25,8 +25,10 @@ import com.intellij.psi.stubs.StubOutputStream
 import com.intellij.util.Processor
 import com.intellij.util.io.StringRef
 import com.tang.intellij.lua.Constants
+import com.tang.intellij.lua.comment.LuaCommentUtil
 import com.tang.intellij.lua.comment.psi.LuaDocTableDef
 import com.tang.intellij.lua.comment.psi.LuaDocTagClass
+import com.tang.intellij.lua.comment.psi.LuaDocTagField
 import com.tang.intellij.lua.psi.*
 import com.tang.intellij.lua.psi.search.LuaClassInheritorsSearch
 import com.tang.intellij.lua.psi.search.LuaShortNamesManager
@@ -159,7 +161,7 @@ private fun equalToShape(context: SearchContext, target: ITy, source: ITy): Bool
 
     var sourceMemberCount = 0
 
-    source.processMembers(context, true) { _, sourceMember ->
+    source.processMembers(context, true) { _, _ ->
         sourceMemberCount++ < targetMemberCount
     }
 
@@ -396,11 +398,6 @@ abstract class TyClass(override val className: String,
             val tyName = getSelfClassName(classTy)
             return createSerializedClass(tyName, null, Constants.WORD_SELF, classTy, null, null, TyFlags.ANONYMOUS)
         }
-
-        fun createConcreteGenericParameter(genericParam: TyGenericParameter): TyClass {
-            val tyName = getConcreteGenericParameterName(genericParam)
-            return createSerializedClass(tyName, null, genericParam.varName, genericParam, null, null, TyFlags.ANONYMOUS)
-        }
     }
 }
 
@@ -414,6 +411,60 @@ class TyPsiDocClass(override val psi: LuaDocTagClass) : TyClass(
     init {
         aliasName = psi.aliasName
         this.flags = if (psi.isShape) TyFlags.SHAPE else 0
+    }
+
+    override fun processMembers(context: SearchContext, deep: Boolean, process: ProcessTypeMember): Boolean {
+        if (!super.processMembers(context, deep, process) && context.isDumb) {
+            return false
+        }
+
+        if (context.isDumb) {
+            val container = LuaCommentUtil.findContainer(psi)
+            return container.processTags(LuaDocTagField::class.java) { field ->
+                process(this, field)
+            }
+        }
+
+        return true
+    }
+
+    override fun processMember(context: SearchContext, name: String, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
+        if (!super.processMember(context, name, deep, indexerSubstitutor, process)) {
+            return false
+        }
+
+        if (context.isDumb) {
+            val container = LuaCommentUtil.findContainer(psi)
+            container.getFieldDef(name)?.let {
+                if (!process(this, it)) {
+                    return false
+                }
+            }
+            container.getFieldDef(context, TyPrimitiveLiteral.getTy(TyPrimitiveKind.String, name), false, indexerSubstitutor)?.let {
+                if (!process(this, it)) {
+                    return false
+                }
+            }
+        }
+
+        return true
+    }
+
+    override fun processIndexer(context: SearchContext, indexTy: ITy, exact: Boolean, deep: Boolean, indexerSubstitutor: ITySubstitutor?, process: ProcessTypeMember): Boolean {
+        if (!super.processIndexer(context, indexTy, exact, deep, indexerSubstitutor, process)) {
+            return false
+        }
+
+        if (context.isDumb) {
+            val container = LuaCommentUtil.findContainer(psi)
+            container.getFieldDef(context, indexTy, exact, indexerSubstitutor)?.let {
+                if (!process(this, it)) {
+                    return false
+                }
+            }
+        }
+
+        return true
     }
 
     override fun willResolve(context: SearchContext): Boolean {
@@ -605,17 +656,6 @@ fun getSelfClassName(classTy: ITyClass): String {
 
 fun isSelfClass(classTy: ITyClass): Boolean {
     return classTy.isAnonymous && classTy.className.endsWith(CLASS_NAME_SUFFIX_SELF)
-}
-
-private const val GENERIC_PARAMETER_NAME_SUFFIX_CONCRETE = "#concrete"
-
-fun getConcreteGenericParameterName(genericParam: TyGenericParameter): String {
-    val genericName = genericParam.varName
-    return if (genericName.endsWith(GENERIC_PARAMETER_NAME_SUFFIX_CONCRETE)) {
-        genericName
-    } else {
-        genericName + GENERIC_PARAMETER_NAME_SUFFIX_CONCRETE
-    }
 }
 
 fun getGlobalTypeName(text: String): String {
