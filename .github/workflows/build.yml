@@ -22,13 +22,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Gradle Dependencies Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle.properties') }}
 
       - name: Setup Gradle Wrapper Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
@@ -58,13 +58,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Gradle Dependencies Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle.properties') }}
 
       - name: Setup Gradle Wrapper Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
@@ -110,13 +110,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Gradle Dependencies Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/caches
           key: ${{ runner.os }}-gradle-caches-${{ hashFiles('**/*.gradle', '**/*.gradle.kts', 'gradle.properties') }}
 
       - name: Setup Gradle Wrapper Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-wrapper-${{ hashFiles('**/gradle/wrapper/gradle-wrapper.properties') }}
@@ -132,7 +132,7 @@ jobs:
           echo "::set-output name=verifierHome::~/.pluginVerifier"
 
       - name: Setup Plugin Verifier IDEs Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ${{ steps.properties.outputs.verifierHome }}/ides
           key: ${{ runner.os }}-plugin-verifier-${{ steps.properties.outputs.ideVersions }}
