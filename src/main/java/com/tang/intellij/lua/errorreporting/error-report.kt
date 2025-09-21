@@ -19,7 +19,6 @@ package com.tang.intellij.lua.errorreporting
 import com.intellij.AbstractBundle
 import com.intellij.diagnostic.AbstractMessage
 import com.intellij.diagnostic.DiagnosticBundle
-import com.intellij.diagnostic.IdeErrorsDialog
 import com.intellij.ide.DataManager
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.idea.IdeaLogger
@@ -155,9 +154,9 @@ private fun encrypt(value: String): String {
 class GitHubErrorReporter : ErrorReportSubmitter() {
 	override fun getReportActionText() = ErrorReportBundle.message("report.error.to.plugin.vendor")
 
-	override fun submit(events: Array<out IdeaLoggingEvent>?, additionalInfo: String?, parentComponent: Component, consumer: Consumer<in SubmittedReportInfo>): Boolean {
+	override fun submit(events: Array<out IdeaLoggingEvent>, additionalInfo: String?, parentComponent: Component, consumer: Consumer<in SubmittedReportInfo>): Boolean {
 		// TODO improve
-		val event = events?.firstOrNull { it.throwable != null } ?: return false
+		val event = events.firstOrNull { it.throwable != null } ?: return false
 		return doSubmit(event, parentComponent, consumer, additionalInfo)
 	}
 
@@ -172,7 +171,7 @@ class GitHubErrorReporter : ErrorReportSubmitter() {
 				IdeaLogger.ourLastActionId.orEmpty(),
 				description ?: "<No description>",
 				event.message ?: event.throwable.message.toString())
-		IdeErrorsDialog.getPlugin(event)?.let { ideaPluginDescriptor ->
+		getPluginDescriptor()?.let { ideaPluginDescriptor ->
 			if (!ideaPluginDescriptor.isBundled) {
 				bean.pluginName = ideaPluginDescriptor.name
 				bean.pluginVersion = ideaPluginDescriptor.version

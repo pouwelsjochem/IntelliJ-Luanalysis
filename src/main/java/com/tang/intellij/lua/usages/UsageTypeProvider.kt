@@ -36,4 +36,13 @@ class UsageTypeProvider : UsageTypeProviderEx {
         }
         return null
     }
+
+    override fun getUsageType(element: PsiElement): UsageType? {
+        if (element is LuaPsiElement) {
+            val parent = element.parent
+            if (parent is LuaCallExpr)
+                return FUNCTION_CALL
+        }
+        return null
+    }
 }

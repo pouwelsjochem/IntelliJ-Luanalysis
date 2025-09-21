@@ -6,9 +6,9 @@ fun properties(key: String) = project.findProperty(key).toString()
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.0.21"
+    id("org.jetbrains.kotlin.jvm") version "2.2.0"
 
-    id("org.jetbrains.intellij") version "1.17.3"
+    id("org.jetbrains.intellij") version "1.17.4"
 
     id("org.jetbrains.changelog") version "2.0.0"
 
@@ -20,7 +20,6 @@ version = properties("pluginVersion")
 
 repositories {
     mavenCentral()
-    jcenter()
 }
 
 dependencies {
@@ -33,7 +32,7 @@ dependencies {
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 
@@ -74,16 +73,20 @@ tasks {
     }
 
     withType<JavaCompile> {
-        sourceCompatibility = "21"
-        targetCompatibility = "21"
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 
     withType<KotlinCompile> {
-        kotlinOptions.jvmTarget = "21"
-        kotlinOptions.freeCompilerArgs = listOf(
-            "-Xjvm-default=all",
-            "-Xopt-in=kotlin.contracts.ExperimentalContracts"
-        )
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            freeCompilerArgs.set(
+                listOf(
+                    "-Xjvm-default=all",
+                    "-opt-in=kotlin.contracts.ExperimentalContracts"
+                )
+            )
+        }
     }
 
     patchPluginXml {

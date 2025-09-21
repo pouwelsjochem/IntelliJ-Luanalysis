@@ -15,7 +15,7 @@
   -->
 
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
-    <idea-version since-build="221" />
+    <idea-version since-build="252" until-build="252.*" />
     <id>au.com.glassechidna.luanalysis</id>
     <name>Luanalysis</name>
     <category>Custom Languages</category>
@@ -25,4 +25,5 @@
     ]]></description>
     <xi:include href="luanalysis-core.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <depends optional="true" config-file="luanalysis-project.xml">com.intellij.java</depends>
+    <depends>com.intellij.modules.platform</depends>
 </idea-plugin>
