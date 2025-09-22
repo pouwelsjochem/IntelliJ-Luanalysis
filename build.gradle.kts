@@ -138,6 +138,7 @@ tasks {
     }
 
     patchPluginXml {
+        dependsOn("copyEmmyLuaDebugger")
         pluginVersion.set(pluginVersionProvider)
         changeNotes.set(changeNotesProvider)
     }
