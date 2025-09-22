@@ -65,7 +65,7 @@ dependencies {
     intellijPlatform {
         create(intellijPlatformType, intellijPlatformVersion)
         intellijPlatformBundledPlugins.orNull?.takeIf { it.isNotEmpty() }?.let { bundledPlugins(it) }
-        intellijPlatformBundledModules.orNull?.takeIf { it.isNotEmpty() }?.let { bundledModules(it) }
+        bundledModules("intellij.spellchecker")
 
         testFramework(TestFrameworkType.Platform)
     }
