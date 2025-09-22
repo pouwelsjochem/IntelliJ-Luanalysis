@@ -141,7 +141,7 @@ jobs:
           key: ${{ runner.os }}-plugin-verifier-${{ steps.properties.outputs.ideVersions }}
 
       - name: Verify Plugin
-        run: ./gradlew runPluginVerifier -Pplugin.verifier.home.dir=${{ steps.properties.outputs.verifierHome }}
+        run: ./gradlew verifyPlugin -Pplugin.verifier.home.dir=${{ steps.properties.outputs.verifierHome }}
 
   github-release:
     name: Github Release
