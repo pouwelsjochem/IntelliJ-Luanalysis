@@ -22,7 +22,6 @@ import com.intellij.icons.AllIcons
 import com.intellij.ide.CommonActionsManager
 import com.intellij.ide.TreeExpander
 import com.intellij.ide.projectView.TreeStructureProvider
-import com.intellij.ide.util.treeView.AbstractTreeBuilder
 import com.intellij.ide.util.treeView.AbstractTreeStructureBase
 import com.intellij.ide.util.treeView.NodeDescriptor
 import com.intellij.ide.util.treeView.NodeRenderer
@@ -35,6 +34,10 @@ import com.intellij.psi.PsiFile
 import com.intellij.ui.AutoScrollToSourceHandler
 import com.intellij.ui.OnePixelSplitter
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.tree.AsyncTreeModel
+import com.intellij.ui.tree.StructureTreeModel
+import com.intellij.ui.treeStructure.Tree
+import com.intellij.util.ui.tree.TreeUtil
 import com.intellij.usageView.UsageInfo
 import com.intellij.usages.impl.UsagePreviewPanel
 import com.intellij.util.EditSourceOnDoubleClickHandler
@@ -54,7 +57,7 @@ class LuaCheckPanel(val project: Project) : SimpleToolWindowPanel(false), DataPr
     private val rootNode = DefaultMutableTreeNode()
     private val treeModel = DefaultTreeModel(rootNode)
     private val tree: JTree = JTree(treeModel)
-    val builder:LuaCheckTreeBuilder = LuaCheckTreeBuilder(tree, treeModel, project)
+    val builder: LuaCheckTreeBuilder = LuaCheckTreeBuilder(project)
     private val treeExpander = MyTreeExpander()
     private var myUsagePreviewPanel: UsagePreviewPanel? = null
 
@@ -128,7 +131,7 @@ class LuaCheckPanel(val project: Project) : SimpleToolWindowPanel(false), DataPr
         group.add(MyPreviewAction())
         toolBarPanel.add(ActionManager.getInstance().createActionToolbar(ActionPlaces.TODO_VIEW_TOOLBAR, group, false).component)
 
-        builder.initRootNode()
+        builder.performUpdate()
 
         //preview
         myUsagePreviewPanel = UsagePreviewPanel(project, FindInProjectUtil.setupViewPresentation(false, FindModel()))
@@ -185,54 +188,58 @@ class LuaCheckPanel(val project: Project) : SimpleToolWindowPanel(false), DataPr
     }
 }
 
-class LuaCheckTreeBuilder(tree: JTree, model: DefaultTreeModel, val project: Project)
-    : AbstractTreeBuilder(tree, model, LuaCheckTreeStructure(project), null, false) {
+class LuaCheckTreeBuilder(
+    val project: Project
+) {
+    // Tree structure describing the hierarchy
+    private val structureModel =
+        StructureTreeModel(LuaCheckTreeStructure(project), null, project)
+
+    // Async wrapper used as the Swing model
+    private val asyncModel = AsyncTreeModel(structureModel, project)
+
+    // The JTree you can embed in your UI
+    val tree: Tree = Tree(asyncModel)
+
     var isAutoScrollMode: Boolean = false
     var arePackagesShown: Boolean = true
     var showPreview: Boolean = false
 
-    override fun initRootNode() {
-        super.initRootNode()
-        performUpdate()
-    }
-
     fun clear() {
-        val root = rootElement as LCRootNode
-        root.clear()
+        (structureModel.root as LCRootNode).clear()
+        structureModel.invalidate()          // replaces queueUpdateFrom
     }
 
     fun addFile(file: PsiFile): LCPsiFileNode {
-        val root = rootElement as LCRootNode
+        val root = structureModel.root as LCRootNode
         val fileNode = LCPsiFileNode(project, file)
         root.append(fileNode)
+        structureModel.invalidate()
         return fileNode
     }
 
     fun addLCItem(item: LCRecordData, fileNode: LCPsiFileNode) {
         fileNode.append(LCRecord(project, fileNode.value, item))
+        structureModel.invalidate()
     }
 
     fun performUpdate() {
-        queueUpdateFrom(rootNode, true)
+        structureModel.invalidate()
     }
 
-    fun collapseAll() {
-        var rc = tree.rowCount - 1
-        while (rc >= 0) {
-            tree.collapseRow(rc)
-            rc--
-        }
+    fun collapseAll() { // keepSelectionLevel = 0 collapses everything
+        TreeUtil.collapseAll(tree, 0)
     }
 
     fun expandAll() {
-        ui.expandAll {  }
+        TreeUtil.expandAll(tree)
     }
 }
 
 class LuaCheckTreeStructure(project: Project) : AbstractTreeStructureBase(project) {
     val root: LCRootNode = LCRootNode(project)
 
-    override fun commit() { }
+    override fun commit() {}
 
     override fun getProviders(): List<TreeStructureProvider> {
         return emptyList()

@@ -28,10 +28,8 @@ interface TypeMember : TypeGuessable {
     }
 
     // LuaPsiElement/NavigatablePsiElement have getName() and we want implementors to be able to implement these
-    // interfaces as well as TypeMember, so our getter is explicitly given the JVM name "getName". Unfortunately,
-    // Kotlin tooling is unfortunately unaware of our fix and reports CONFLICTING_INHERITED_JVM_DECLARATIONS.
-    val name: String?
-        @get:JvmName("getName") get
+    // interfaces as well as TypeMember, so we expose the same JVM signature.
+    fun getName(): String?
 
     val visibility: Visibility
     val isDeprecated: Boolean
@@ -45,3 +43,6 @@ fun TypeMember.guessParentClass(context: SearchContext): ITyClass? {
     val ty = guessParentType(context)
     return TyUnion.getPerfectClass(ty)
 }
+
+val TypeMember.name: String?
+    get() = getName()

@@ -72,7 +72,7 @@ class TableCompletionProvider : ClassMemberCompletionProvider() {
             ty.eachTopClass { luaType ->
                 val context = SearchContext.get(project)
                 luaType.processMembers(context) { curType, member ->
-                    member.name?.let {
+                    member.getName()?.let {
                         if (prefixMatcher.prefixMatches(it)) {
                             val className = curType.displayName
                             if (member is LuaTypeField) {

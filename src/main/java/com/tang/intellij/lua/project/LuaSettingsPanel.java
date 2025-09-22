@@ -20,6 +20,7 @@ import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.openapi.components.ServiceManager;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.options.SearchableConfigurable;
+import java.util.Arrays;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.util.text.StringUtil;
@@ -107,6 +108,11 @@ public class LuaSettingsPanel implements SearchableConfigurable, Configurable.No
 
     @Override
     public boolean isModified() {
+        String[] currentRoots = settings.getAdditionalSourcesRoot().clone();
+        Arrays.sort(currentRoots);
+        String[] newRoots = additionalRoots.getRoots().clone();
+        Arrays.sort(newRoots);
+
         return !StringUtil.equals(settings.getRequireLikeFunctionNamesString(), requireFunctionNames.getText()) ||
                 settings.getTooLargerFileThreshold() != getTooLargerFileThreshold() ||
                 settings.isStrictDoc() != strictDoc.isSelected() ||
@@ -119,7 +125,7 @@ public class LuaSettingsPanel implements SearchableConfigurable, Configurable.No
                 settings.getAttachDebugCaptureStd() != captureStd.isSelected() ||
                 settings.getAttachDebugDefaultCharsetName() != defaultCharset.getSelectedItem() ||
                 settings.getLanguageLevel() != languageLevel.getSelectedItem() ||
-                !ArrayUtil.equals(settings.getAdditionalSourcesRoot(), additionalRoots.getRoots(), String::compareTo);
+                !Arrays.equals(currentRoots, newRoots);
     }
 
     @Override

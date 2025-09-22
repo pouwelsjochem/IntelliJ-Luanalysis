@@ -18,6 +18,7 @@ jflex*.jar
 /*.zip
 
 .vs
+.intellijPlatform
 */Debug
 */Release
 *.log

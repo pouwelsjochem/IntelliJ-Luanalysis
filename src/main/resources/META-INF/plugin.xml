@@ -25,5 +25,6 @@
     ]]></description>
     <xi:include href="luanalysis-core.xml" xpointer="xpointer(/idea-plugin/*)"/>
     <depends optional="true" config-file="luanalysis-project.xml">com.intellij.java</depends>
+    <depends>com.intellij.spellchecker</depends>
     <depends>com.intellij.modules.platform</depends>
 </idea-plugin>

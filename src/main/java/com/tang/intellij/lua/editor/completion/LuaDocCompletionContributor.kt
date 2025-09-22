@@ -117,9 +117,9 @@ class LuaDocCompletionContributor : CompletionContributor() {
                     val classType = classDef.type
                     val ctx = SearchContext.get(classDef.project)
                     classType.processMembers(ctx) { _, member ->
-                        val name = member.name
-                        if (name != null && member is LuaTypeField) {
-                            completionResultSet.addElement(LookupElementBuilder.create(name).withIcon(LuaIcons.CLASS_FIELD))
+                        val memberName = member.getName()
+                        if (memberName != null && member is LuaTypeField) {
+                            completionResultSet.addElement(LookupElementBuilder.create(memberName).withIcon(LuaIcons.CLASS_FIELD))
                         }
                         true
                     }
@@ -136,9 +136,9 @@ class LuaDocCompletionContributor : CompletionContributor() {
                     val ctx = SearchContext.get(seeRefTag.project)
                     val classType = seeRefTag.typeRef?.resolveType(ctx) as? ITyClass
                     classType?.processMembers(ctx) { _, member ->
-                        val name = member.name
-                        if (name != null) {
-                            completionResultSet.addElement(LookupElementBuilder.create(name).withIcon(LuaIcons.CLASS_FIELD))
+                        val memberName = member.getName()
+                        if (memberName != null) {
+                            completionResultSet.addElement(LookupElementBuilder.create(memberName).withIcon(LuaIcons.CLASS_FIELD))
                         }
                         true
                     }
