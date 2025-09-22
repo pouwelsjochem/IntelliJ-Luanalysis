@@ -42,7 +42,8 @@ private fun MarkdownNode.visit(action: (MarkdownNode, () -> Unit) -> Unit) {
 }
 
 fun markdownToHtml(text: String): String {
-    val mdTree = MarkdownParser(CommonMarkFlavourDescriptor()).buildMarkdownTreeFromString(text)
+    val parser = MarkdownParser(CommonMarkFlavourDescriptor())
+    val mdTree = parser.buildMarkdownTreeFromString(text)
     val mdNode = MarkdownNode(mdTree, null, text)
     return mdNode.toHtml()
 }

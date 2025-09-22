@@ -59,14 +59,12 @@ dependencies {
         include("*.jar")
     })
 
-    implementation("org.jetbrains:markdown:0.3.1")
     implementation(kotlin("stdlib", "2.2.0"))
 
     intellijPlatform {
         create(intellijPlatformType, intellijPlatformVersion)
         intellijPlatformBundledPlugins.orNull?.takeIf { it.isNotEmpty() }?.let { bundledPlugins(it) }
-        bundledModules("intellij.spellchecker")
-
+        intellijPlatformBundledModules.orNull?.takeIf { it.isNotEmpty() }?.let { bundledModules(it) }
         testFramework(TestFrameworkType.Platform)
     }
 
