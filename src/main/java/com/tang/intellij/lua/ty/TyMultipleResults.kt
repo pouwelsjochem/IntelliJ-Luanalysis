@@ -41,7 +41,7 @@ class TyMultipleResults : Ty {
         val substitutedResults = list.withIndex().flatMap {
             val substitutedResult = it.value.substitute(context, substitutor)
 
-            if (substitutedResult !== it) {
+            if (substitutedResult !== it.value) {
                 resultsSubstituted = true
             }
 

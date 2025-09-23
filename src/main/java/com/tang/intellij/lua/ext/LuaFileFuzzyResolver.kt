@@ -20,6 +20,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.ProjectAndLibrariesScope
 
@@ -32,9 +33,10 @@ class LuaFileFuzzyResolver : ILuaFileResolver {
             ApplicationManager.getApplication().runReadAction {
                 var perfectMatch = Int.MAX_VALUE
                 for (extName in extNames) {
-                    val files = FilenameIndex.getFilesByName(project, "$fileName$extName", ProjectAndLibrariesScope(project))
-                    for (file in files) {
-                        val path = file.virtualFile.canonicalPath
+                    val virtualFiles = FilenameIndex.getVirtualFilesByName("$fileName$extName", ProjectAndLibrariesScope(project))
+                    for (virtualFile in virtualFiles) {
+                        val file = PsiManager.getInstance(project).findFile(virtualFile) ?: continue
+                        val path = virtualFile.canonicalPath
                         if (path != null && perfectMatch > path.length && path.endsWith("$shortUrl$extName")) {
                             perfect = file
                             perfectMatch = path.length

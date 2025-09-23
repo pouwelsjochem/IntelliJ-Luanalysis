@@ -45,14 +45,8 @@ class RemoveUnusedLocal : LocalInspectionTool() {
                 if (o.textMatches(Constants.WORD_UNDERLINE))
                     return
                 val search = ReferencesSearch.search(o, o.useScope)
-                var found = false
-                for (reference in search) {
-                    if (reference.element !is LuaDocPsiElement) {
-                        found = true
-                        break
-                    }
-                }
-                if (!found) {
+                val hasCodeUsage = search.anyMatch { it.element !is LuaDocPsiElement }
+                if (!hasCodeUsage) {
                     holder.registerProblem(o,
                             "Unused parameter : '${o.name}'",
                             ProblemHighlightType.LIKE_UNUSED_SYMBOL,

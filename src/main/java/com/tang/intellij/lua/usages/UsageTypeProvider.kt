@@ -22,10 +22,11 @@ import com.intellij.usages.impl.rules.UsageType
 import com.intellij.usages.impl.rules.UsageTypeProviderEx
 import com.tang.intellij.lua.psi.LuaCallExpr
 import com.tang.intellij.lua.psi.LuaPsiElement
+import java.util.function.Supplier
 
 class UsageTypeProvider : UsageTypeProviderEx {
     companion object {
-        val FUNCTION_CALL = UsageType("Function call")
+        val FUNCTION_CALL = UsageType(Supplier { "Function call" })
     }
 
     override fun getUsageType(element: PsiElement, targets: Array<out UsageTarget>): UsageType? {

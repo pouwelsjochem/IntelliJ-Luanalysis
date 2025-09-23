@@ -17,9 +17,9 @@
 package com.tang.intellij.lua.project
 
 import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.service
 import com.intellij.util.xmlb.XmlSerializerUtil
 import com.tang.intellij.lua.Constants
 import com.tang.intellij.lua.lang.LuaLanguageLevel
@@ -90,7 +90,7 @@ class LuaSettings : PersistentStateComponent<LuaSettings> {
     companion object {
 
         val instance: LuaSettings
-            get() = ServiceManager.getService(LuaSettings::class.java)
+            get() = service()
 
         fun isRequireLikeFunctionName(name: String): Boolean {
             return instance.requireLikeFunctionNames.contains(name) || name == Constants.WORD_REQUIRE

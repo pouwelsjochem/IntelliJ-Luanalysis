@@ -103,8 +103,8 @@ class LuaCheckPanel(val project: Project) : SimpleToolWindowPanel(false), DataPr
     inner class MyAutoScrollToSourceHandler : AutoScrollToSourceHandler() {
         override fun isAutoScrollMode() = builder.isAutoScrollMode
 
-        override fun setAutoScrollMode(value: Boolean) {
-            builder.isAutoScrollMode = value
+        override fun setAutoScrollMode(state: Boolean) {
+            builder.isAutoScrollMode = state
         }
     }
 
@@ -167,24 +167,7 @@ class LuaCheckPanel(val project: Project) : SimpleToolWindowPanel(false), DataPr
             }
         }
 
-        myUsagePreviewPanel?.updateLayout(if (list.isEmpty()) null else list)
-    }
-
-    override fun getData(dataId: String): Any? {
-        if (CommonDataKeys.NAVIGATABLE.`is`(dataId)) {
-            val path = tree.selectionPath
-            if (path != null && !builder.showPreview) {
-                val node = path.lastPathComponent as DefaultMutableTreeNode
-                val userObject = node.userObject
-                if (userObject is NodeDescriptor<*>) {
-                    val element = userObject.element
-                    if (element is LCRecord) {
-                        return element.getNavigator()
-                    }
-                }
-            }
-        }
-        return super.getData(dataId)
+        myUsagePreviewPanel?.updateLayout(project, if (list.isEmpty()) null else list)
     }
 }
 
@@ -207,24 +190,24 @@ class LuaCheckTreeBuilder(
 
     fun clear() {
         (structureModel.root as LCRootNode).clear()
-        structureModel.invalidate()          // replaces queueUpdateFrom
+        structureModel.invalidateAsync()
     }
 
     fun addFile(file: PsiFile): LCPsiFileNode {
         val root = structureModel.root as LCRootNode
         val fileNode = LCPsiFileNode(project, file)
         root.append(fileNode)
-        structureModel.invalidate()
+        structureModel.invalidateAsync()
         return fileNode
     }
 
     fun addLCItem(item: LCRecordData, fileNode: LCPsiFileNode) {
         fileNode.append(LCRecord(project, fileNode.value, item))
-        structureModel.invalidate()
+        structureModel.invalidateAsync()
     }
 
     fun performUpdate() {
-        structureModel.invalidate()
+        structureModel.invalidateAsync()
     }
 
     fun collapseAll() { // keepSelectionLevel = 0 collapses everything

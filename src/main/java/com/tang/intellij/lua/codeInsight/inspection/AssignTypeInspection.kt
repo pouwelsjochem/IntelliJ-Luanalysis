@@ -201,7 +201,9 @@ class AssignTypeInspection : StrictInspection() {
                                 inspectAssignee(context, assignee, value, resolvedValue, varianceFlags, inspectionTargetElement, expression) { problem ->
                                     val sourceElement = problem.sourceElement
                                     val targetElement = problem.targetElement
-                                    val sourceMessage = if (assignees.size > 1 && values.size > 1) "Result ${valueIndex + 1}, ${problem.message.decapitalize()}" else problem.message
+                                    val sourceMessage = if (assignees.size > 1 && values.size > 1) {
+                                        "Result ${valueIndex + 1}, ${problem.message.replaceFirstChar { ch -> ch.lowercaseChar() }}"
+                                    } else problem.message
                                     val highlightType = problem.highlightType ?: ProblemHighlightType.GENERIC_ERROR_OR_WARNING
 
                                     myHolder.registerProblem(sourceElement, sourceMessage, highlightType)
@@ -230,7 +232,7 @@ class AssignTypeInspection : StrictInspection() {
                                     val targetElement = problem.targetElement
                                     val sourceMessage = if (assignees.size > 1) {
                                         val resultIndex = assigneeIndex - lastExpressionFirstAssigneeIndex + 1
-                                        "Result ${resultIndex}, ${problem.message.decapitalize()}"
+                                        "Result ${resultIndex}, ${problem.message.replaceFirstChar { ch -> ch.lowercaseChar() }}"
                                     } else {
                                         problem.message
                                     }

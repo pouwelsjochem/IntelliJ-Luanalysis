@@ -198,16 +198,26 @@ class GitHubErrorReporter : ErrorReportSubmitter() {
 		override fun consume(reportInfo: SubmittedReportInfo) {
 			consumer.consume(reportInfo)
 
-			val group = NotificationGroupManager.getInstance().getNotificationGroup("Error Report")
-			val title = DiagnosticBundle.message("error.report.title")
+            val group = NotificationGroupManager.getInstance().getNotificationGroup("Error Report")
+            val title = DiagnosticBundle.message("error.report.title")
 
-			val notification = if (reportInfo.status == SubmissionStatus.FAILED) {
-				group.createNotification(title, reportInfo.linkText, NotificationType.ERROR, null)
-			} else {
-				group.createNotification(title, reportInfo.linkText, NotificationType.INFORMATION, NotificationListener.URL_OPENING_LISTENER)
-			}
+            // Build content with an HTML link when there is a URL
+            val content = if (reportInfo.linkText.isNullOrBlank()) {
+                "No link provided."
+            } else {
+                "<a href=\"${reportInfo.linkText}\">${reportInfo.linkText}</a>"
+            }
 
-			notification.setImportant(false).notify(project)
+            val notification = group.createNotification(title, content,
+                if (reportInfo.status == SubmissionStatus.FAILED)
+                    NotificationType.ERROR
+                else
+                    NotificationType.INFORMATION
+            ).apply {
+                isImportant = false
+            }
+
+            notification.notify(project)
 		}
 	}
 }

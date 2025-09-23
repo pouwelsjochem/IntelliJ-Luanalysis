@@ -7,6 +7,8 @@ import com.intellij.util.Processor
 import com.intellij.util.containers.ContainerUtil
 import com.intellij.util.indexing.FindSymbolParameters
 import com.intellij.util.indexing.IdFilter
+import com.intellij.psi.stubs.StubIndex
+import com.tang.intellij.lua.comment.psi.LuaDocTagAlias
 import com.tang.intellij.lua.stubs.index.LuaAliasIndex
 
 class LuaAliasNavigationContributor : ChooseByNameContributorEx {
@@ -21,8 +23,7 @@ class LuaAliasNavigationContributor : ChooseByNameContributorEx {
                                          parameters: FindSymbolParameters) {
         val project = parameters.project
         val searchScope = parameters.searchScope
-        LuaAliasIndex.instance.processAllKeys(project) {
-            ContainerUtil.process(LuaAliasIndex.instance.get(it, project, searchScope), processor)
-        }
+        val aliases = StubIndex.getElements(LuaAliasIndex.instance.key, name, project, searchScope, LuaDocTagAlias::class.java)
+        ContainerUtil.process(aliases, processor)
     }
 }

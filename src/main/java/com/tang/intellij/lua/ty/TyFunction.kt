@@ -317,7 +317,7 @@ open class FunSignature(colonCall: Boolean,
 class TyDocFunSignature(luaDocFunctionTy: LuaDocFunctionTy, colonCall: Boolean) : FunSignature(
     colonCall,
     luaDocFunctionTy.returnType,
-    luaDocFunctionTy.params as? Array<out LuaParamInfo>, // TODO: Remove cast once https://youtrack.jetbrains.com/issue/KT-36399 lands
+    luaDocFunctionTy.params?.filterNotNull()?.toTypedArray(),
     luaDocFunctionTy.varargParam,
     luaDocFunctionTy.genericDefList.map { TyGenericParameter(it) }.toTypedArray()
 ), IPsiFunSignature {

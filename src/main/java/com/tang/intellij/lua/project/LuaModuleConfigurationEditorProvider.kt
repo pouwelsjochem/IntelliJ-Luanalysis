@@ -29,7 +29,7 @@ import java.util.*
 class LuaModuleConfigurationEditorProvider : ModuleConfigurationEditorProvider {
     override fun createEditors(moduleConfigurationState: ModuleConfigurationState): Array<ModuleConfigurationEditor> {
         val editors = ArrayList<ModuleConfigurationEditor>()
-        val module = moduleConfigurationState.rootModel.module
+        val module = moduleConfigurationState.modifiableRootModel.module
         val moduleType = ModuleType.get(module)
         if (moduleType == LuaModuleType.instance) {
             val clazz = Class.forName("com.intellij.openapi.roots.ui.configuration.DefaultModuleConfigurationEditorFactory")

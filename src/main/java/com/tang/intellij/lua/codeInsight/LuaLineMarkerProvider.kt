@@ -94,19 +94,14 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                             override fun search(elt: PsiElement)
                                     = LuaOverridingMethodsSearch.search(methodDef)
                         },
-                        GutterIconRenderer.Alignment.CENTER))
+                        GutterIconRenderer.Alignment.CENTER, { "Overridden method marker" }))
             }
 
             //line separator
             if (daemonSettings.SHOW_METHOD_SEPARATORS) {
                 //todo : module file method
                 val anchor = PsiTreeUtil.firstChild(methodDef)
-                val lineSeparator = LineMarkerInfo(anchor,
-                        anchor.textRange,
-                        null,
-                        null,
-                        null,
-                        GutterIconRenderer.Alignment.RIGHT)
+                val lineSeparator = LineMarkerInfo(anchor, anchor.textRange)
                 lineSeparator.separatorColor = colorsManager.globalScheme.getColor(CodeInsightColors.METHOD_SEPARATORS_COLOR)
                 lineSeparator.separatorPlacement = SeparatorPlacement.TOP
                 result.add(lineSeparator)
@@ -129,7 +124,7 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                                 return LuaClassInheritorsSearch.search(GlobalSearchScope.allScope(project), project, element.name)
                             }
                         },
-                        GutterIconRenderer.Alignment.CENTER))
+                        GutterIconRenderer.Alignment.CENTER, { "Sub marker" }))
             }
 
             // class 标记
@@ -140,7 +135,8 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                     LuaIcons.CLASS,
                     null,
                     null,
-                    GutterIconRenderer.Alignment.CENTER)
+                    GutterIconRenderer.Alignment.CENTER
+            ) { "Lua class marker" }
             result.add(classIcon)
         } else if (element is LuaCallExpr) {
             val expr = element.expression
@@ -159,7 +155,8 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                                     AllIcons.Gutter.RecursiveMethod,
                                     FunctionUtil.constant("Recursive call"),
                                     null,
-                                    GutterIconRenderer.Alignment.CENTER))
+                                    GutterIconRenderer.Alignment.CENTER
+                            ) { "Recursive call marker" })
                             break
                         }
                         cur = bodyOwner
@@ -176,7 +173,8 @@ class LuaLineMarkerProvider : LineMarkerProvider {
                                 returnKeyWord.textRange,
                                 LuaIcons.LineMarker.TailCall,
                                 FunctionUtil.constant("Tail call"), null,
-                                GutterIconRenderer.Alignment.CENTER))
+                                GutterIconRenderer.Alignment.CENTER
+                        ) { "Tail call marker" })
                         break
                     }
                 }

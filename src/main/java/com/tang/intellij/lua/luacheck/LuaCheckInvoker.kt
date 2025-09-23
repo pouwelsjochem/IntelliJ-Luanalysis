@@ -22,7 +22,7 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.process.ProcessNotCreatedException
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.components.ServiceManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -93,7 +93,7 @@ private fun runLuaCheck(project: Project,
                         fileList: Array<Pair<String, PsiFile>>,
                         dir: VirtualFile,
                         indicator: ProgressIndicator) {
-    val checkView = ServiceManager.getService(project, LuaCheckView::class.java)
+    val checkView = project.service<LuaCheckView>()
     val panel = checkView.panel
     val builder = panel.builder
     builder.clear()

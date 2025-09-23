@@ -17,6 +17,7 @@
 package com.tang.intellij.lua.project
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.*
 import com.tang.intellij.lua.lang.LuaIcons
 import org.jdom.Element
@@ -29,7 +30,9 @@ import javax.swing.Icon
  */
 class LuaSdkType : SdkType("Lua SDK") {
 
-    override fun suggestHomePath() = PathEnvironmentVariableUtil.findInPath("lua")?.parent
+    override fun suggestHomePath(): String? = PathEnvironmentVariableUtil.findInPath("lua")?.parent
+
+    override fun suggestHomePaths(project: Project?): Collection<String> = listOfNotNull(PathEnvironmentVariableUtil.findInPath("lua")?.parent)
 
     override fun isValidSdkHome(s: String) = true
 
@@ -50,8 +53,6 @@ class LuaSdkType : SdkType("Lua SDK") {
     }
 
     override fun getIcon(): Icon = LuaIcons.FILE
-
-    override fun getIconForAddAction(): Icon = LuaIcons.FILE
 
     companion object {
         val instance: LuaSdkType

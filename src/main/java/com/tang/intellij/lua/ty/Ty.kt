@@ -392,7 +392,7 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
                             var contextualMessage = if (i >= args.size &&
                                 (concreteArgTypes.size > args.size || (variadicArg != null && concreteArgTypes.size >= args.size))
                             ) {
-                                "Result ${i + 1}, ${problem.message.decapitalize()}"
+                                "Result ${i + 1}, ${problem.message.replaceFirstChar { ch -> ch.lowercaseChar() }}"
                             } else {
                                 problem.message
                             }
@@ -460,7 +460,7 @@ fun ITy.matchSignature(context: SearchContext, call: LuaCallExpr, processProblem
                 } else if (varargParamTy != null && variadicArg != null) {
                     if (processProblem != null) {
                         val contravariant = ProblemUtil.contravariantOf(context, varargParamTy, variadicArg.ty, 0, null, variadicArg.param) { problem ->
-                            val contextualMessage = "Variadic result, ${problem.message.decapitalize()}"
+                            val contextualMessage = "Variadic result, ${problem.message.replaceFirstChar { ch -> ch.lowercaseChar() }}"
                             signatureProblems?.add(Problem(null, problem.sourceElement, contextualMessage, problem.highlightType))
                         }
 

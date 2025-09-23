@@ -36,15 +36,12 @@ typealias ProcessLuaPsiClassMember = (ownerTy: ITyClass, member: LuaPsiTypeMembe
 class LuaClassMemberIndex : StringStubIndexExtension<LuaPsiTypeMember>() {
     override fun getKey() = StubKeys.CLASS_MEMBER
 
-    override fun get(s: String, project: Project, scope: GlobalSearchScope): Collection<LuaPsiTypeMember> =
-            StubIndex.getElements(StubKeys.CLASS_MEMBER, s, project, scope, LuaPsiTypeMember::class.java)
-
     companion object {
         val instance = LuaClassMemberIndex()
 
         private fun processKey(context: SearchContext, type: ITyClass, key: String, process: ProcessLuaPsiClassMember): Boolean {
             if (!context.isDumb) {
-                LuaClassMemberIndex.instance.get(key, context.project, context.scope).forEach {
+                StubIndex.getElements(instance.key, key, context.project, context.scope, LuaPsiTypeMember::class.java).forEach {
                     ProgressManager.checkCanceled()
 
                     if (!process(type, it)) {
@@ -120,7 +117,7 @@ class LuaClassMemberIndex : StringStubIndexExtension<LuaPsiTypeMember>() {
                 return listOf()
             }
 
-            return instance.get(className, context.project, context.scope)
+            return StubIndex.getElements(instance.key, className, context.project, context.scope, LuaPsiTypeMember::class.java)
         }
 
         fun processMember(
@@ -271,7 +268,7 @@ class LuaClassMemberIndex : StringStubIndexExtension<LuaPsiTypeMember>() {
 
             val key = "$namespace*$memberName"
 
-            val members = LuaClassMemberIndex.instance.get(key, context.project, context.scope)
+            val members = StubIndex.getElements(instance.key, key, context.project, context.scope, LuaPsiTypeMember::class.java)
             return ContainerUtil.process(members, processor)
         }
 

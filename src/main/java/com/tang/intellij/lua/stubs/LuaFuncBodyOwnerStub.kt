@@ -69,8 +69,7 @@ interface LuaFuncBodyOwnerStub<T : PsiElement> : StubElement<T> {
             }
             return docTy
         }
-        return findChildStubByType(LuaElementTypes.FUNC_BODY)?.let {
-            walkBody(context, it)
-        } ?: Primitives.VOID
+        val bodyStub = childrenStubs.firstOrNull { it.elementType === LuaElementTypes.FUNC_BODY }
+        return bodyStub?.let { walkBody(context, it) } ?: Primitives.VOID
     }
 }

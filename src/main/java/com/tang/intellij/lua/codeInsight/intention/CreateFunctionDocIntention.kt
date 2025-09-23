@@ -28,10 +28,8 @@ import org.jetbrains.annotations.Nls
 
 class CreateFunctionDocIntention : FunctionIntention() {
     override fun isAvailable(bodyOwner: LuaFuncBodyOwner<*>, editor: Editor): Boolean {
-        if (bodyOwner is LuaCommentOwner) {
-            return bodyOwner.comment == null || bodyOwner.funcBody == null
-        }
-        return false
+        val commentOwner = bodyOwner as? LuaCommentOwner ?: return false
+        return commentOwner.comment == null || bodyOwner.funcBody == null
     }
 
     @Nls

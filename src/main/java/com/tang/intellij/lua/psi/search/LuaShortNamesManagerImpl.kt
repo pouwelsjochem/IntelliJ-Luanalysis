@@ -17,8 +17,10 @@
 package com.tang.intellij.lua.psi.search
 
 import com.intellij.openapi.project.Project
+import com.intellij.psi.stubs.StubIndex
 import com.intellij.util.Processor
 import com.intellij.util.containers.ContainerUtil
+import com.tang.intellij.lua.comment.psi.LuaDocTagAlias
 import com.tang.intellij.lua.psi.LuaClass
 import com.tang.intellij.lua.psi.LuaPsiTypeMember
 import com.tang.intellij.lua.psi.LuaTypeAlias
@@ -46,7 +48,8 @@ class LuaShortNamesManagerImpl : LuaShortNamesManager {
     }
 
     override fun processAliases(context: SearchContext, name: String, processor: Processor<in LuaTypeAlias>): Boolean {
-        return ContainerUtil.process(LuaAliasIndex.instance.get(name, context.project, context.scope), processor)
+        val aliases = StubIndex.getElements(LuaAliasIndex.instance.key, name, context.project, context.scope, LuaDocTagAlias::class.java)
+        return ContainerUtil.process(aliases, processor)
     }
 
     override fun processAllClasses(project: Project, processor: Processor<String>): Boolean {

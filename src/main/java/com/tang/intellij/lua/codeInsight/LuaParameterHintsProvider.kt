@@ -28,6 +28,7 @@ import com.tang.intellij.lua.search.PsiSearchContext
 import com.tang.intellij.lua.search.SearchContext
 import com.tang.intellij.lua.ty.*
 import java.util.*
+import java.util.function.Supplier
 
 /**
 
@@ -35,18 +36,22 @@ import java.util.*
  */
 class LuaParameterHintsProvider : InlayParameterHintsProvider {
     companion object {
-        private val ARGS_HINT = Option("lua.hints.show_args_type",
-                "Show argument name hints",
+        private val ARGS_HINT = Option(
+                "lua.hints.show_args_type",
+                Supplier { "Show argument name hints" },
                 true)
 
-        private val LOCAL_VARIABLE_HINT = Option("lua.hints.show_local_var_type",
-                "Show local variable type hints",
+        private val LOCAL_VARIABLE_HINT = Option(
+                "lua.hints.show_local_var_type",
+                Supplier { "Show local variable type hints" },
                 false)
-        private val PARAMETER_TYPE_HINT = Option("lua.hints.show_parameter_type",
-                "Show parameter type hints",
+        private val PARAMETER_TYPE_HINT = Option(
+                "lua.hints.show_parameter_type",
+                Supplier { "Show parameter type hints" },
                 false)
-        private val FUNCTION_HINT = Option("lua.hints.show_function_type",
-                "Show function return type hints",
+        private val FUNCTION_HINT = Option(
+                "lua.hints.show_function_type",
+                Supplier { "Show function return type hints" },
                 false)
         private const val TYPE_INFO_PREFIX = "@TYPE@"
         private var EXPR_HINT = arrayOf(LuaLiteralExpr::class.java,

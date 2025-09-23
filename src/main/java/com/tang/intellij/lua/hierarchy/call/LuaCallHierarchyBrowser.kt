@@ -39,7 +39,7 @@ class LuaCallHierarchyBrowser(element: PsiElement) : CallHierarchyBrowserBase(el
     }
 
     override fun getComparator(): Comparator<NodeDescriptor<*>>? {
-        return AlphaComparator.INSTANCE
+        return AlphaComparator.getInstance()
     }
 
     override fun getElementFromDescriptor(descriptor: HierarchyNodeDescriptor): PsiElement? {
@@ -48,7 +48,7 @@ class LuaCallHierarchyBrowser(element: PsiElement) : CallHierarchyBrowserBase(el
 
     private fun createHierarchyTree(group: ActionGroup): JTree {
         val tree = createTree(false)
-        PopupHandler.installPopupHandler(tree, group, ActionPlaces.CALL_HIERARCHY_VIEW_POPUP, ActionManager.getInstance())
+        PopupHandler.installPopupMenu(tree, group, ActionPlaces.CALL_HIERARCHY_VIEW_POPUP)
         return tree
     }
 

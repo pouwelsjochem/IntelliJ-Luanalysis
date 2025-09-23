@@ -30,11 +30,9 @@ import org.jetbrains.annotations.Nls
 
 class CreateFunctionReturnAnnotationIntention : FunctionIntention() {
     override fun isAvailable(bodyOwner: LuaFuncBodyOwner<*>, editor: Editor): Boolean {
-        if (bodyOwner is LuaCommentOwner) {
-            val comment = bodyOwner.comment
-            return comment == null || PsiTreeUtil.getChildrenOfType(comment, LuaDocTagReturn::class.java) == null
-        }
-        return false
+        val commentOwner = bodyOwner as? LuaCommentOwner ?: return false
+        val comment = commentOwner.comment
+        return comment == null || PsiTreeUtil.getChildrenOfType(comment, LuaDocTagReturn::class.java) == null
     }
 
     @Nls
@@ -43,13 +41,12 @@ class CreateFunctionReturnAnnotationIntention : FunctionIntention() {
     override fun getText() = "Create return annotation"
 
     override fun invoke(bodyOwner: LuaFuncBodyOwner<*>, editor: Editor) {
-        if (bodyOwner is LuaCommentOwner) {
-            LuaCommentUtil.insertTemplate(bodyOwner, editor) { _, template ->
-                template.addTextSegment("---@return ")
-                val typeSuggest = MacroCallNode(SuggestTypeMacro())
-                template.addVariable("returnType", typeSuggest, TextExpression("table"), false)
-                template.addEndVariable()
-            }
+        val commentOwner = bodyOwner as? LuaCommentOwner ?: return
+        LuaCommentUtil.insertTemplate(commentOwner, editor) { _, template ->
+            template.addTextSegment("---@return ")
+            val typeSuggest = MacroCallNode(SuggestTypeMacro())
+            template.addVariable("returnType", typeSuggest, TextExpression("table"), false)
+            template.addEndVariable()
         }
     }
 }

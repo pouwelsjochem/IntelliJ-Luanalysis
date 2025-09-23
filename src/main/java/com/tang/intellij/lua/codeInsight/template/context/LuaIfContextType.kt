@@ -16,18 +16,25 @@
 
 package com.tang.intellij.lua.codeInsight.template.context
 
+import com.intellij.codeInsight.template.TemplateActionContext
 import com.intellij.codeInsight.template.TemplateContextType
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
+import com.tang.intellij.lua.psi.LuaFuncBody
 import com.tang.intellij.lua.psi.LuaIfStat
 
 /**
  * in if statement
  * Created by TangZX on 2017/4/14.
  */
-class LuaIfContextType : TemplateContextType("LUA_IF", "If statement", LuaCodeContextType::class.java) {
+class LuaIfContextType : TemplateContextType("LUA_IF", "If statement") {
 
-    override fun isInContext(psiFile: PsiFile, i: Int): Boolean {
-        return PsiTreeUtil.findElementOfClassAtOffset(psiFile, i, LuaIfStat::class.java, false) != null
+    override fun getPresentableName() = "If statement"
+
+    override fun isInContext(templateActionContext: TemplateActionContext): Boolean {
+        val file = templateActionContext.file
+        val offset = templateActionContext.startOffset
+        return PsiTreeUtil.findElementOfClassAtOffset(file, offset, LuaIfStat::class.java, false) != null
     }
+
 }

@@ -40,15 +40,10 @@ class LuaLanguageCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvider()
         return SmartIndentOptionsEditor()
     }
 
-    override fun getDefaultCommonSettings(): CommonCodeStyleSettings {
-        val commonSettings = CommonCodeStyleSettings(language)
-        commonSettings.initIndentOptions()
-        return commonSettings
-    }
-
     override fun customizeSettings(consumer: CodeStyleSettingsCustomizable, settingsType: LanguageCodeStyleSettingsProvider.SettingsType) {
+
         when (settingsType) {
-            LanguageCodeStyleSettingsProvider.SettingsType.SPACING_SETTINGS -> {
+            SettingsType.SPACING_SETTINGS -> {
                 consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AFTER_TABLE_FIELD_SEP", "After field sep", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
                 consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_AROUND_CONCAT_OPERATOR", "After concat sep", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
                 consumer.showCustomOption(LuaCodeStyleSettings::class.java, "SPACE_INSIDE_INLINE_TABLE", "Inside inline table", CodeStyleSettingsCustomizableOptions.getInstance().SPACES_OTHER)
@@ -56,7 +51,8 @@ class LuaLanguageCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvider()
                         "SPACE_BEFORE_COMMA",
                         "SPACE_AFTER_COMMA")
             }
-            LanguageCodeStyleSettingsProvider.SettingsType.WRAPPING_AND_BRACES_SETTINGS -> {
+
+            SettingsType.WRAPPING_AND_BRACES_SETTINGS -> {
                 consumer.showStandardOptions(
                         "METHOD_PARAMETERS_WRAP",
                         "ALIGN_MULTILINE_PARAMETERS",

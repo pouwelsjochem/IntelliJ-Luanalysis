@@ -18,6 +18,7 @@ package com.tang.intellij.lua.stubs.index
 
 import com.intellij.psi.NavigatablePsiElement
 import com.intellij.psi.stubs.StringStubIndexExtension
+import com.intellij.psi.stubs.StubIndex
 import com.tang.intellij.lua.lang.LuaLanguage
 import com.tang.intellij.lua.search.SearchContext
 
@@ -40,7 +41,7 @@ class LuaShortNameIndex : StringStubIndexExtension<NavigatablePsiElement>() {
             return if (context.isDumb) {
                 emptyList()
             } else {
-                instance.get(key, context.project, context.scope)
+                StubIndex.getElements(instance.key, key, context.project, context.scope, NavigatablePsiElement::class.java)
             }
         }
     }

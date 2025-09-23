@@ -19,7 +19,7 @@ package com.tang.intellij.lua.project
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.ServiceManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.projectRoots.impl.ProjectJdkImpl
@@ -47,7 +47,7 @@ class StdSDK : Disposable {
 
             if (value == null) {
                 // We instantiate StdSDK as an app service so that when unloaded we remove the SDK type we're about to add.
-                ServiceManager.getService(StdSDK::class.java)
+                service<StdSDK>()
 
                 value = ProjectJdkImpl(NAME, LuaSdkType.instance)
                 ApplicationManager.getApplication().runWriteAction { jdkTable.addJdk(value) }

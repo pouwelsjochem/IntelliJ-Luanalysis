@@ -83,7 +83,7 @@ class ReturnTypeInspection : StrictInspection() {
                             val targetMessage = problem.message
 
                             if (expressionTyLists.size > 1) {
-                                problem.message = "Result ${i + 1}, ${targetMessage.decapitalize()}"
+                                problem.message = "Result ${i + 1}, ${targetMessage.replaceFirstChar { ch -> ch.lowercaseChar() }}"
                             }
 
                             problems.add(problem)
