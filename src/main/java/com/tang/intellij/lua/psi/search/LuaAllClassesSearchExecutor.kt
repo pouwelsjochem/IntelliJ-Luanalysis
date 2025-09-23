@@ -17,8 +17,9 @@
 package com.tang.intellij.lua.psi.search
 
 import com.intellij.openapi.application.QueryExecutorBase
-import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.application.ReadAction
 import com.intellij.util.Processor
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.tang.intellij.lua.ty.ITyClass
 import com.tang.intellij.lua.ty.createSerializedClass
 
@@ -28,11 +29,12 @@ import com.tang.intellij.lua.ty.createSerializedClass
  */
 class LuaAllClassesSearchExecutor : QueryExecutorBase<ITyClass, LuaAllClassesSearch.SearchParameters>() {
     override fun processQuery(searchParameters: LuaAllClassesSearch.SearchParameters, processor: Processor<in ITyClass>) {
-        DumbService.getInstance(searchParameters.project).runReadActionInSmartMode {
-            LuaShortNamesManager.getInstance(searchParameters.project).processAllClasses(searchParameters.project) { typeName ->
-                //todo no TySerializedClass
-                processor.process(createSerializedClass(typeName))
-            }
+        val project = searchParameters.project
+
+        ReadAction.nonBlocking<Unit> {
+            LuaShortNamesManager.getInstance(project).processAllClasses(project) { typeName -> processor.process(createSerializedClass(typeName)) }
         }
+            .inSmartMode(project)
+            .submit(AppExecutorUtil.getAppExecutorService())
     }
 }

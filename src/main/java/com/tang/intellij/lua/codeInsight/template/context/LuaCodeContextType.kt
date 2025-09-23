@@ -18,9 +18,8 @@ package com.tang.intellij.lua.codeInsight.template.context
 
 import com.intellij.codeInsight.template.TemplateActionContext
 import com.intellij.codeInsight.template.TemplateContextType
+import com.intellij.codeInsight.template.impl.TemplateContextTypes
 import com.intellij.psi.PsiComment
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.util.PsiUtilCore
 import com.tang.intellij.lua.lang.LuaFileType
@@ -34,6 +33,10 @@ import com.tang.intellij.lua.psi.LuaTypes
 class LuaCodeContextType : TemplateContextType("LUA_CODE") {
 
     override fun getPresentableName() = "Lua"
+
+    override fun getBaseContextType(): TemplateContextType {
+        return TemplateContextTypes.getByClass(LuaCodeContextType::class.java);
+    }
 
     override fun isInContext(templateActionContext: TemplateActionContext): Boolean {
         val file = templateActionContext.file

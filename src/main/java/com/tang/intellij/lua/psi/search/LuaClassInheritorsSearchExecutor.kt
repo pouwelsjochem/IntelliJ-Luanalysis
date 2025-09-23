@@ -28,10 +28,12 @@ import com.tang.intellij.lua.stubs.index.LuaSuperClassIndex
  */
 class LuaClassInheritorsSearchExecutor : QueryExecutor<LuaDocTagClass, LuaClassInheritorsSearch.SearchParameters> {
 
-    private fun processInheritors(searchParameters: LuaClassInheritorsSearch.SearchParameters,
-                                  typeName: String,
-                                  processedNames: MutableSet<String>,
-                                  processor: Processor<in LuaDocTagClass>): Boolean {
+    private fun processInheritors(
+        searchParameters: LuaClassInheritorsSearch.SearchParameters,
+        typeName: String,
+        processedNames: MutableSet<String>,
+        processor: Processor<in LuaDocTagClass>
+    ): Boolean {
         var ret = true
         // recursion guard!!
         if (!processedNames.add(typeName))
@@ -53,10 +55,18 @@ class LuaClassInheritorsSearchExecutor : QueryExecutor<LuaDocTagClass, LuaClassI
     }
 
     override fun execute(searchParameters: LuaClassInheritorsSearch.SearchParameters, processor: Processor<in LuaDocTagClass>): Boolean {
-        var ref = true
-        DumbService.getInstance(searchParameters.project).runReadActionInSmartMode {
-            ref = processInheritors(searchParameters, searchParameters.typeName, mutableSetOf(), processor)
-        }
-        return ref
+        val project = searchParameters.project
+
+        return com.intellij.openapi.application.ReadAction
+            .nonBlocking<Boolean> { // Compute and return the Boolean directly
+                processInheritors(
+                    searchParameters,
+                    searchParameters.typeName,
+                    mutableSetOf(),
+                    processor
+                )
+            }
+            .inSmartMode(project)      // wait for indexing to finish
+            .executeSynchronously()    // block and return the Boolean result
     }
 }
