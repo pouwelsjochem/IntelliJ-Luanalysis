@@ -24,12 +24,12 @@ import com.intellij.psi.util.PsiTreeUtil
 import com.tang.intellij.lua.psi.LuaFuncBody
 
 
-class LuaFunContextType : TemplateContextType("LUA_FUNCTION", "function", LuaFunContextType::class.java) {
+class LuaFunContextType : TemplateContextType("LUA_FUNCTION", "function", LuaCodeContextType::class.java) {
 
     override fun getPresentableName(): String = "function"
 
 //    override fun getBaseContextType(): TemplateContextType {
-//        return TemplateContextTypes.getByClass(LuaFunContextType::class.java);
+//        return TemplateContextTypes.getByClass(LuaCodeContextType::class.java);
 //    }
 
     override fun isInContext(templateActionContext: TemplateActionContext): Boolean {

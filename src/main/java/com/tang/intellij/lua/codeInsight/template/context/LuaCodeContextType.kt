@@ -30,13 +30,9 @@ import com.tang.intellij.lua.psi.LuaTypes
 
  * Created by tangzx on 2017/2/11.
  */
-class LuaCodeContextType : TemplateContextType("LUA_CODE", "Lua", LuaCodeContextType::class.java) {
+class LuaCodeContextType : TemplateContextType("LUA_CODE", "Lua") {
 
     override fun getPresentableName() = "Lua"
-
-//    override fun getBaseContextType(): TemplateContextType {
-//        return TemplateContextTypes.getByClass(LuaCodeContextType::class.java);
-//    }
 
     override fun isInContext(templateActionContext: TemplateActionContext): Boolean {
         val file = templateActionContext.file
