@@ -26,7 +26,7 @@ import com.tang.intellij.lua.psi.LuaIfStat
  * in if statement
  * Created by TangZX on 2017/4/14.
  */
-class LuaIfContextType : TemplateContextType("LUA_IF") {
+class LuaIfContextType : TemplateContextType("LUA_IF", "If statement", LuaIfContextType::class.java) {
 
     override fun getPresentableName() = "If statement"
 

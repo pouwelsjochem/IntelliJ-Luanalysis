@@ -30,7 +30,7 @@ import com.tang.intellij.lua.psi.LuaTypes
 
  * Created by tangzx on 2017/2/11.
  */
-class LuaCodeContextType : TemplateContextType("LUA_CODE") {
+class LuaCodeContextType : TemplateContextType("LUA_CODE", "Lua", LuaCodeContextType::class.java) {
 
     override fun getPresentableName() = "Lua"
 
