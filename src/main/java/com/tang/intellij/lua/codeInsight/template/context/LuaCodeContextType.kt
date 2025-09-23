@@ -34,9 +34,9 @@ class LuaCodeContextType : TemplateContextType("LUA_CODE", "Lua", LuaCodeContext
 
     override fun getPresentableName() = "Lua"
 
-    override fun getBaseContextType(): TemplateContextType {
-        return TemplateContextTypes.getByClass(LuaCodeContextType::class.java);
-    }
+//    override fun getBaseContextType(): TemplateContextType {
+//        return TemplateContextTypes.getByClass(LuaCodeContextType::class.java);
+//    }
 
     override fun isInContext(templateActionContext: TemplateActionContext): Boolean {
         val file = templateActionContext.file

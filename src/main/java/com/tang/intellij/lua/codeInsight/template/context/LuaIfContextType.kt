@@ -30,9 +30,9 @@ class LuaIfContextType : TemplateContextType("LUA_IF", "If statement", LuaIfCont
 
     override fun getPresentableName() = "If statement"
 
-    override fun getBaseContextType(): TemplateContextType {
-        return TemplateContextTypes.getByClass(LuaIfContextType::class.java);
-    }
+//    override fun getBaseContextType(): TemplateContextType {
+//        return TemplateContextTypes.getByClass(LuaIfContextType::class.java);
+//    }
 
     override fun isInContext(templateActionContext: TemplateActionContext): Boolean {
         val file = templateActionContext.file
