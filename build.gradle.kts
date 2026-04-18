@@ -36,8 +36,8 @@ val changeNotesProvider = providers.provider {
 
 plugins {
     id("java")
-    id("org.jetbrains.kotlin.jvm") version "2.2.0"
-    id("org.jetbrains.intellij.platform") version "2.9.0"
+    id("org.jetbrains.kotlin.jvm") version "2.3.10"
+    id("org.jetbrains.intellij.platform") version "2.14.0"
     id("org.jetbrains.changelog") version "2.0.0"
     id("de.undercouch.download") version "5.6.0"
 }
@@ -57,9 +57,10 @@ repositories {
 dependencies {
     implementation(fileTree("libs") {
         include("*.jar")
+        exclude("jna-*.jar", "jna-platform-*.jar")
     })
 
-    implementation(kotlin("stdlib", "2.2.0"))
+    implementation(kotlin("stdlib", "2.3.10"))
 
     intellijPlatform {
         create(intellijPlatformType, intellijPlatformVersion)
@@ -69,12 +70,12 @@ dependencies {
     }
 
     testImplementation("junit:junit:4.13.2")
-    testImplementation(kotlin("test", "2.2.0"))
+    testImplementation(kotlin("test", "2.3.10"))
 }
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
@@ -119,20 +120,24 @@ tasks {
     }
 
     withType<JavaCompile> {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+        sourceCompatibility = "21"
+        targetCompatibility = "21"
     }
 
     withType<KotlinCompile> {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
             freeCompilerArgs.set(
                 listOf(
-                    "-Xjvm-default=all",
+                    "-jvm-default=no-compatibility",
                     "-opt-in=kotlin.contracts.ExperimentalContracts"
                 )
             )
         }
+    }
+
+    withType<Test> {
+        systemProperty("java.awt.headless", "true")
     }
 
     patchPluginXml {

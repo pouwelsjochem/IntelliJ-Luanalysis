@@ -19,6 +19,7 @@ package com.tang.intellij.lua.editor.formatter
 import com.intellij.application.options.CodeStyleAbstractConfigurable
 import com.intellij.application.options.CodeStyleAbstractPanel
 import com.intellij.application.options.TabbedLanguageCodeStylePanel
+import com.intellij.lang.Language
 import com.intellij.psi.codeStyle.CodeStyleConfigurable
 import com.intellij.psi.codeStyle.CodeStyleSettings
 import com.intellij.psi.codeStyle.CodeStyleSettingsProvider
@@ -52,6 +53,8 @@ class LuaCodeStyleSettingsProvider : CodeStyleSettingsProvider() {
     }
 
     override fun getConfigurableDisplayName() = LuaLanguage.INSTANCE.displayName
+
+    override fun getLanguage(): Language = LuaLanguage.INSTANCE
 
     override fun createCustomSettings(settings: CodeStyleSettings): CustomCodeStyleSettings? {
         return LuaCodeStyleSettings(settings)

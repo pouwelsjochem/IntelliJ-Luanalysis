@@ -87,7 +87,7 @@ aNumber = <error descr="Type mismatch. Required: 'number' Found: 'boolean'">gene
 aBoolean = <error descr="Type mismatch. Required: 'boolean' Found: '1 | 2 | 3'">genericVarargFunction(1, 1, 2, 3)</error>
 aBoolean = genericVarargFunction(1, true, false, true)
 
-----@type fun<T>(index: number, ...: T): T
+---@type fun<T>(index: number, ...: T): T
 local genericVarargFunction2
 
 aNumber = genericVarargFunction2(1, 1, 2, 3)

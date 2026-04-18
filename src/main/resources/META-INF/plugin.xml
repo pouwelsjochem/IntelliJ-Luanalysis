@@ -15,7 +15,7 @@
   -->
 
 <idea-plugin xmlns:xi="http://www.w3.org/2001/XInclude">
-    <idea-version since-build="252" until-build="252.*" />
+    <idea-version since-build="261" until-build="261.*" />
     <id>au.com.glassechidna.luanalysis</id>
     <name>Luanalysis</name>
     <category>Custom Languages</category>

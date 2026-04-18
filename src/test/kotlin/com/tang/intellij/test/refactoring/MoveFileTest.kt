@@ -20,6 +20,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesProcessor
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
@@ -28,9 +29,9 @@ class MoveFileTest : BasePlatformTestCase() {
 
     override fun getTestDataPath(): String = "src/test/resources/refactoring"
 
+    @Test
     fun testMoveFile() {
-        // Load all files in the test folder so both A.lua and the 'to' directory exist
-        myFixture.copyDirectoryToProject("", "") // copies entire refactoring/<testname> folder
+        myFixture.copyDirectoryToProject("moveFile/before", "")
 
         val fileToMove = "A.lua"
         val targetDirName = "to"
